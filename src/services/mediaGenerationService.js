@@ -129,6 +129,10 @@ Output ONLY the optimized prompt text, nothing else.
     }
 
     console.log('📡 Calling DALL-E 3...');
+    console.log('Prompt length:', prompt.length, 'characters');
+
+    // DALL-E 3 tiene límite de 4000 caracteres
+    const truncatedPrompt = prompt.length > 4000 ? prompt.substring(0, 4000) : prompt;
 
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
@@ -138,7 +142,7 @@ Output ONLY the optimized prompt text, nothing else.
       },
       body: JSON.stringify({
         model: 'dall-e-3',
-        prompt: prompt,
+        prompt: truncatedPrompt,
         n: 1,
         size: '1024x1792', // Vertical format similar to 9:16
         quality: 'hd',
@@ -147,10 +151,13 @@ Output ONLY the optimized prompt text, nothing else.
     });
 
     if (!response.ok) {
-      throw new Error(`DALL-E 3 API error: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      console.error('DALL-E 3 Error Response:', errorData);
+      throw new Error(`DALL-E 3 API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const data = await response.json();
+    console.log('✅ DALL-E 3 image generated successfully');
     return {
       url: data.data[0].url,
       provider: 'openai'
