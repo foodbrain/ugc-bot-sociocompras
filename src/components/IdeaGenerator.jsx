@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { geminiService } from '../services/geminiService';
 import { storageService } from '../services/storageService';
 
-const IdeaGenerator = ({ setIdeas, onOpenWorkspace }) => {
+const IdeaGenerator = ({ activeBrand, setIdeas, onOpenWorkspace }) => {
     const [loading, setLoading] = useState(false);
     const [savedIdeas, setSavedIdeas] = useState([]);
     const [generatingScriptFor, setGeneratingScriptFor] = useState(null);
@@ -10,25 +10,41 @@ const IdeaGenerator = ({ setIdeas, onOpenWorkspace }) => {
     const [ideaType, setIdeaType] = useState(null); // null = general, 'UGC' = UGC con AI influencer
 
     useEffect(() => {
-        // Cargar ideas guardadas al montar el componente
+        // Cargar ideas guardadas filtradas por marca activa
         const loadIdeas = async () => {
-            const ideas = await storageService.getIdeas();
-            setSavedIdeas(ideas.sort((a, b) => (b.ranking || 0) - (a.ranking || 0)));
+            if (activeBrand) {
+                const ideas = await storageService.getIdeas(activeBrand.id);
+                setSavedIdeas(ideas.sort((a, b) => (b.ranking || 0) - (a.ranking || 0)));
+            } else {
+                setSavedIdeas([]);
+            }
         };
         loadIdeas();
-    }, []);
+    }, [activeBrand]);
 
     const generateIdeas = async () => {
         setLoading(true);
         try {
-            const brandData = await storageService.getBrandData();
-            const ideas = await geminiService.generateIdeas(brandData, 5, useViralResearch, ideaType);
+            // Verificar que hay marca activa
+            if (!activeBrand) {
+                alert('⚠️ Por favor selecciona una marca primero');
+                setLoading(false);
+                return;
+            }
+
+            const ideas = await geminiService.generateIdeas(activeBrand, 5, useViralResearch, ideaType);
+
+            // Agregar brandId a cada idea antes de guardar
+            const ideasWithBrand = ideas.map(idea => ({
+                ...idea,
+                brandId: activeBrand.id
+            }));
 
             // Guardar ideas automáticamente
-            await storageService.saveIdeas(ideas);
+            await storageService.saveIdeas(ideasWithBrand);
 
-            // Actualizar la lista
-            const allIdeas = await storageService.getIdeas();
+            // Actualizar la lista filtrada por marca
+            const allIdeas = await storageService.getIdeas(activeBrand.id);
             setSavedIdeas(allIdeas.sort((a, b) => (b.ranking || 0) - (a.ranking || 0)));
 
             if (setIdeas) {
@@ -49,14 +65,14 @@ const IdeaGenerator = ({ setIdeas, onOpenWorkspace }) => {
     const generateScriptForIdea = async (idea) => {
         setGeneratingScriptFor(idea.id);
         try {
-            const brandData = await storageService.getBrandData();
             const concept = `${idea.title}\n\n${idea.description}\n\nHook: ${idea.hook}`;
 
             // Pasar el objeto idea completo para que generateScript pueda detectar tipo UGC
-            const script = await geminiService.generateScript(concept, brandData, idea);
+            const script = await geminiService.generateScript(concept, activeBrand, idea);
 
-            // Guardar el script
+            // Guardar el script con brandId
             await storageService.saveScript({
+                brandId: activeBrand.id,
                 ideaId: idea.id,
                 ideaTitle: idea.title,
                 content: script,
@@ -76,14 +92,14 @@ const IdeaGenerator = ({ setIdeas, onOpenWorkspace }) => {
 
     const updateRanking = async (ideaId, newRanking) => {
         await storageService.updateIdea(ideaId, { ranking: newRanking });
-        const updatedIdeas = await storageService.getIdeas();
+        const updatedIdeas = await storageService.getIdeas(activeBrand.id);
         setSavedIdeas(updatedIdeas.sort((a, b) => (b.ranking || 0) - (a.ranking || 0)));
     };
 
     const deleteIdea = async (ideaId) => {
         if (confirm('¿Estás seguro de eliminar esta idea?')) {
             await storageService.deleteIdea(ideaId);
-            const updatedIdeas = await storageService.getIdeas();
+            const updatedIdeas = await storageService.getIdeas(activeBrand.id);
             setSavedIdeas(updatedIdeas);
         }
     };

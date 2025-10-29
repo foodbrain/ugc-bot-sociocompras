@@ -10,7 +10,7 @@ import { storageService } from './services/storageService';
 
 const App = () => {
     const [activeView, setActiveView] = useState('dashboard');
-    const [brandData, setBrandData] = useState(null);
+    const [activeBrand, setActiveBrand] = useState(null);
     const [ideas, setIdeas] = useState([]);
     const [scripts, setScripts] = useState([]);
     const [workspaceIdeaId, setWorkspaceIdeaId] = useState(null);
@@ -18,13 +18,21 @@ const App = () => {
     useEffect(() => {
         const loadData = async () => {
             try {
-                const savedBrandData = await storageService.getBrandData();
-                const savedIdeas = await storageService.getIdeas();
-                const savedScripts = await storageService.getScripts();
+                // Cargar todas las marcas
+                const brands = await storageService.getAllBrands();
 
-                if (savedBrandData) setBrandData(savedBrandData);
-                if (savedIdeas) setIdeas(savedIdeas);
-                if (savedScripts) setScripts(savedScripts);
+                // Si hay marcas, seleccionar la primera como activa
+                if (brands.length > 0) {
+                    const firstBrand = brands[0];
+                    setActiveBrand(firstBrand);
+
+                    // Cargar datos de esa marca
+                    const savedIdeas = await storageService.getIdeas(firstBrand.id);
+                    const savedScripts = await storageService.getScripts(firstBrand.id);
+
+                    setIdeas(savedIdeas);
+                    setScripts(savedScripts);
+                }
             } catch (error) {
                 console.error('Error loading data:', error);
             }
@@ -32,6 +40,23 @@ const App = () => {
 
         loadData();
     }, []);
+
+    // Re-cargar datos cuando cambie la marca activa
+    useEffect(() => {
+        const loadBrandData = async () => {
+            if (activeBrand) {
+                const savedIdeas = await storageService.getIdeas(activeBrand.id);
+                const savedScripts = await storageService.getScripts(activeBrand.id);
+                setIdeas(savedIdeas);
+                setScripts(savedScripts);
+            } else {
+                setIdeas([]);
+                setScripts([]);
+            }
+        };
+
+        loadBrandData();
+    }, [activeBrand]);
 
     const handleOpenWorkspace = (ideaId) => {
         setWorkspaceIdeaId(ideaId);
@@ -46,13 +71,13 @@ const App = () => {
     const renderView = () => {
         switch (activeView) {
             case 'brand-research':
-                return <BrandResearch setBrandData={setBrandData} />;
+                return <BrandResearch activeBrand={activeBrand} onBrandChange={setActiveBrand} />;
             case 'pipeline':
-                return <Pipeline brandData={brandData} />;
+                return <Pipeline brandData={activeBrand} />;
             case 'idea-generator':
-                return <IdeaGenerator setIdeas={setIdeas} onOpenWorkspace={handleOpenWorkspace} />;
+                return <IdeaGenerator activeBrand={activeBrand} setIdeas={setIdeas} onOpenWorkspace={handleOpenWorkspace} />;
             case 'script-creator':
-                return <ScriptCreator brandData={brandData} ideas={ideas} setScripts={setScripts} />;
+                return <ScriptCreator activeBrand={activeBrand} setScripts={setScripts} />;
             case 'workspace':
                 return workspaceIdeaId ? (
                     <IdeaWorkspace ideaId={workspaceIdeaId} onBack={handleCloseWorkspace} />
@@ -63,7 +88,7 @@ const App = () => {
                 );
             case 'dashboard':
             default:
-                return <Dashboard brandData={brandData} ideas={ideas} scripts={scripts} />;
+                return <Dashboard activeBrand={activeBrand} ideas={ideas} scripts={scripts} />;
         }
     };
 

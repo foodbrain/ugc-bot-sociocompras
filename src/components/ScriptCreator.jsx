@@ -4,7 +4,7 @@ import { geminiService } from '../services/geminiService';
 import { storageService } from '../services/storageService';
 import ShotBreakdown from './ShotBreakdown';
 
-const ScriptCreator = ({ brandData, ideas, setScripts }) => {
+const ScriptCreator = ({ activeBrand, setScripts }) => {
     const [concept, setConcept] = useState('');
     const [generatedScript, setGeneratedScript] = useState('');
     const [loading, setLoading] = useState(false);
@@ -13,10 +13,17 @@ const ScriptCreator = ({ brandData, ideas, setScripts }) => {
     const [selectedScript, setSelectedScript] = useState(null);
 
     useEffect(() => {
-        // Cargar scripts guardados
-        const scripts = storageService.getScripts();
-        setSavedScripts(scripts.sort((a, b) => (b.ranking || 0) - (a.ranking || 0)));
-    }, []);
+        // Cargar scripts guardados filtrados por marca activa
+        const loadScripts = async () => {
+            if (activeBrand) {
+                const scripts = await storageService.getScripts(activeBrand.id);
+                setSavedScripts(scripts.sort((a, b) => (b.ranking || 0) - (a.ranking || 0)));
+            } else {
+                setSavedScripts([]);
+            }
+        };
+        loadScripts();
+    }, [activeBrand]);
 
     const handleGenerate = async () => {
         if (!concept) {
@@ -24,27 +31,33 @@ const ScriptCreator = ({ brandData, ideas, setScripts }) => {
             return;
         }
 
+        if (!activeBrand) {
+            alert('⚠️ Por favor selecciona una marca primero');
+            return;
+        }
+
         setLoading(true);
         try {
             let script;
             if (useAI) {
-                const savedBrandData = storageService.getBrandData();
-                script = await geminiService.generateScript(concept, savedBrandData);
+                script = await geminiService.generateScript(concept, activeBrand);
             } else {
                 script = generateScript(concept);
             }
 
             setGeneratedScript(script);
 
-            // Guardar script automáticamente
-            const savedScript = storageService.addScript({
+            // Guardar script automáticamente con brandId
+            await storageService.saveScript({
+                brandId: activeBrand.id,
                 concept: concept,
                 content: script,
-                generatedWithAI: useAI
+                generatedWithAI: useAI,
+                ranking: 0
             });
 
-            // Actualizar lista
-            const allScripts = storageService.getScripts();
+            // Actualizar lista filtrada por marca
+            const allScripts = await storageService.getScripts(activeBrand.id);
             setSavedScripts(allScripts.sort((a, b) => (b.ranking || 0) - (a.ranking || 0)));
 
             if (setScripts) {
@@ -70,16 +83,16 @@ const ScriptCreator = ({ brandData, ideas, setScripts }) => {
         }
     };
 
-    const updateRanking = (scriptId, newRanking) => {
-        storageService.updateScriptRanking(scriptId, newRanking);
-        const updatedScripts = storageService.getScripts();
+    const updateRanking = async (scriptId, newRanking) => {
+        await storageService.updateScript(scriptId, { ranking: newRanking });
+        const updatedScripts = await storageService.getScripts(activeBrand.id);
         setSavedScripts(updatedScripts.sort((a, b) => (b.ranking || 0) - (a.ranking || 0)));
     };
 
-    const deleteScript = (scriptId) => {
+    const deleteScript = async (scriptId) => {
         if (confirm('¿Estás seguro de eliminar este script?')) {
-            storageService.deleteScript(scriptId);
-            const updatedScripts = storageService.getScripts();
+            await storageService.deleteScript(scriptId);
+            const updatedScripts = await storageService.getScripts(activeBrand.id);
             setSavedScripts(updatedScripts);
             if (selectedScript?.id === scriptId) {
                 setSelectedScript(null);
