@@ -1,51 +1,212 @@
 // Service for media generation integrations
-// Nano Banana for images and Veo 3.1 for videos
+// Supports multiple providers: Vertex AI Imagen 3, DALL-E 3, Stability AI
+import { geminiService } from './geminiService';
+
+// Configuración de API - agregar a .env
+const IMAGE_API_PROVIDER = import.meta.env.VITE_IMAGE_API_PROVIDER || 'demo'; // 'vertex-ai', 'openai', 'stability', 'demo'
+const VERTEX_AI_PROJECT_ID = import.meta.env.VITE_VERTEX_AI_PROJECT_ID;
+const VERTEX_AI_LOCATION = import.meta.env.VITE_VERTEX_AI_LOCATION || 'us-central1';
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+const STABILITY_API_KEY = import.meta.env.VITE_STABILITY_API_KEY;
 
 export const mediaGenerationService = {
   /**
-   * Generate AI Influencer visual using Nano Banana
+   * Generate AI Influencer visual using configured image provider
    * @param {string} influencerDescription - Detailed description of the AI influencer
    * @returns {Promise<Object>} - Generated image data
    */
   async generateInfluencerVisual(influencerDescription) {
     try {
-      // TODO: Implementar integración real con Nano Banana
-      // Por ahora, simular respuesta
-      console.log('🖼️ Generating influencer visual with Nano Banana...');
+      console.log(`🖼️ Generating influencer visual with ${IMAGE_API_PROVIDER}...`);
       console.log('Description:', influencerDescription);
 
-      // Simular delay de API
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Paso 1: Usar Gemini para optimizar el prompt
+      const optimizedPrompt = await this.optimizeImagePromptWithGemini(influencerDescription);
+      console.log('✨ Optimized prompt:', optimizedPrompt);
 
-      // Construir prompt optimizado para Nano Banana
-      const prompt = this.buildInfluencerImagePrompt(influencerDescription);
+      // Paso 2: Generar imagen según el provider configurado
+      let imageResult;
 
-      // TODO: Llamada real a Nano Banana API
-      // const response = await fetch('NANO_BANANA_API_ENDPOINT', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': `Bearer ${NANO_BANANA_API_KEY}`
-      //   },
-      //   body: JSON.stringify({
-      //     prompt: prompt,
-      //     width: 1080,
-      //     height: 1920,
-      //     style: 'realistic-ugc'
-      //   })
-      // });
+      switch (IMAGE_API_PROVIDER) {
+        case 'vertex-ai':
+          imageResult = await this.generateWithVertexAI(optimizedPrompt);
+          break;
+
+        case 'openai':
+          imageResult = await this.generateWithOpenAI(optimizedPrompt);
+          break;
+
+        case 'stability':
+          imageResult = await this.generateWithStability(optimizedPrompt);
+          break;
+
+        case 'demo':
+        default:
+          imageResult = await this.generateDemoImage(optimizedPrompt);
+          break;
+      }
 
       return {
         success: true,
-        imageUrl: 'https://placeholder.com/1080x1920', // Placeholder
-        prompt: prompt,
-        service: 'nano-banana',
+        imageUrl: imageResult.url,
+        prompt: optimizedPrompt,
+        originalDescription: influencerDescription,
+        service: IMAGE_API_PROVIDER,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
       console.error('Error generating influencer visual:', error);
-      throw new Error('Failed to generate influencer visual with Nano Banana');
+      throw new Error(`Failed to generate influencer visual with ${IMAGE_API_PROVIDER}`);
     }
+  },
+
+  /**
+   * Usar Gemini para optimizar el prompt de imagen
+   */
+  async optimizeImagePromptWithGemini(description) {
+    try {
+      const optimizationPrompt = `
+You are an expert at creating prompts for AI image generation models like DALL-E 3, Stable Diffusion, and Imagen 3.
+
+Given this character/scene description:
+"${description}"
+
+Create an optimized, detailed prompt for generating a photorealistic image. Include:
+1. Physical appearance details (age, ethnicity, hair, clothing, expression)
+2. Camera angle and framing (portrait, medium shot, close-up)
+3. Lighting (natural, soft, golden hour, studio)
+4. Background and environment
+5. Style keywords (photorealistic, ultra-realistic, high detail, professional photography)
+6. Format specifications (9:16 vertical, smartphone photo aesthetic)
+
+IMPORTANT:
+- Focus on visual details only
+- Use descriptive adjectives
+- Avoid abstract concepts
+- Keep it under 300 words
+
+Output ONLY the optimized prompt text, nothing else.
+`;
+
+      // Llamar a Gemini para optimizar el prompt
+      const optimized = await geminiService.generateContent(optimizationPrompt);
+      return optimized.trim();
+    } catch (error) {
+      console.warn('Failed to optimize prompt with Gemini, using original:', error);
+      return this.buildInfluencerImagePrompt(description);
+    }
+  },
+
+  /**
+   * Generar con Vertex AI Imagen 3
+   */
+  async generateWithVertexAI(prompt) {
+    if (!VERTEX_AI_PROJECT_ID) {
+      throw new Error('VITE_VERTEX_AI_PROJECT_ID not configured');
+    }
+
+    // TODO: Implementar llamada real a Vertex AI
+    // Requiere autenticación con Google Cloud
+    console.log('📡 Calling Vertex AI Imagen 3...');
+
+    const endpoint = `https://${VERTEX_AI_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_AI_PROJECT_ID}/locations/${VERTEX_AI_LOCATION}/publishers/google/models/imagen-3.0-generate-001:predict`;
+
+    // Simular por ahora
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    return {
+      url: `https://via.placeholder.com/1080x1920.png?text=Imagen+3+Generated`,
+      provider: 'vertex-ai'
+    };
+  },
+
+  /**
+   * Generar con OpenAI DALL-E 3
+   */
+  async generateWithOpenAI(prompt) {
+    if (!OPENAI_API_KEY) {
+      throw new Error('VITE_OPENAI_API_KEY not configured');
+    }
+
+    console.log('📡 Calling DALL-E 3...');
+
+    const response = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'dall-e-3',
+        prompt: prompt,
+        n: 1,
+        size: '1024x1792', // Vertical format similar to 9:16
+        quality: 'hd',
+        style: 'natural' // Para look más realista
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`DALL-E 3 API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      url: data.data[0].url,
+      provider: 'openai'
+    };
+  },
+
+  /**
+   * Generar con Stability AI
+   */
+  async generateWithStability(prompt) {
+    if (!STABILITY_API_KEY) {
+      throw new Error('VITE_STABILITY_API_KEY not configured');
+    }
+
+    console.log('📡 Calling Stability AI...');
+
+    const response = await fetch('https://api.stability.ai/v2beta/stable-image/generate/core', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${STABILITY_API_KEY}`,
+        'Accept': 'image/*'
+      },
+      body: JSON.stringify({
+        prompt: prompt,
+        aspect_ratio: '9:16',
+        output_format: 'png'
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Stability AI error: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+
+    return {
+      url: url,
+      provider: 'stability'
+    };
+  },
+
+  /**
+   * Modo demo - genera placeholder con prompt visible
+   */
+  async generateDemoImage(prompt) {
+    console.log('🎨 Demo mode - generating placeholder...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Generar URL de placeholder con texto del prompt
+    const shortPrompt = prompt.substring(0, 50).replace(/\s+/g, '+');
+
+    return {
+      url: `https://placehold.co/1080x1920/6366f1/white?text=Demo+Mode%0A%0APrompt:+${shortPrompt}...`,
+      provider: 'demo'
+    };
   },
 
   /**

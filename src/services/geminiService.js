@@ -25,6 +25,21 @@ const withRetry = async (fn, maxRetries = 3, baseDelay = 2000) => {
 const delayBetweenCalls = (ms = 1000) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const geminiService = {
+  /**
+   * Método genérico para generar contenido con Gemini
+   */
+  async generateContent(prompt) {
+    try {
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return response.text();
+    } catch (error) {
+      console.error('Error generating content with Gemini:', error);
+      throw error;
+    }
+  },
+
   async enhanceBrandResearch(brandData) {
     try {
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
