@@ -2,24 +2,69 @@ import React, { useState } from 'react';
 import { TRANSITIONS } from '../utils/soraFramework';
 import { mediaGenerationService } from '../services/mediaGenerationService';
 
-const ShotBreakdown = ({ script, scriptId }) => {
+const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
     const [shots, setShots] = useState([]);
+    const [characters, setCharacters] = useState([]);
+    const [generatingCharacter, setGeneratingCharacter] = useState(null);
     const [generatingImage, setGeneratingImage] = useState(null);
     const [generatingVideo, setGeneratingVideo] = useState(null);
+    const [showBreakdown, setShowBreakdown] = useState(false);
 
-    React.useEffect(() => {
+    // Detectar personajes en el script
+    const detectCharacters = (scriptText) => {
+        const characters = [];
+
+        // Buscar patrones comunes de personajes
+        const patterns = [
+            /(\d+)\s*(office worker|worker|person|people|woman|man|women|men|influencer|customer|client|user)/gi,
+            /(a|an|the)\s+(young|middle-aged|old)?\s*(woman|man|person|influencer|customer|client)/gi,
+            /AI\s+influencer/gi,
+            /UGC\s+creator/gi
+        ];
+
+        patterns.forEach(pattern => {
+            const matches = scriptText.matchAll(pattern);
+            for (const match of matches) {
+                const fullMatch = match[0];
+                if (!characters.some(c => c.description.toLowerCase().includes(fullMatch.toLowerCase()))) {
+                    characters.push({
+                        id: `char-${characters.length}`,
+                        description: fullMatch.trim(),
+                        image: null
+                    });
+                }
+            }
+        });
+
+        // Si no se detectan personajes específicos pero es UGC, crear un personaje genérico
+        if (characters.length === 0 && /UGC|influencer/i.test(scriptText)) {
+            characters.push({
+                id: 'char-0',
+                description: 'UGC Creator',
+                image: null
+            });
+        }
+
+        return characters.slice(0, 5); // Máximo 5 personajes
+    };
+
+    const parseScript = () => {
         if (!script) return;
 
         // Extraer SOLO la sección "Prompt para Sora 2:"
         const soraPromptMatch = script.match(/\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)(?=\n\n\*\*|$)/i);
 
         if (!soraPromptMatch) {
-            // Si no se encuentra la sección específica, no mostrar shots
             setShots([]);
+            setCharacters([]);
             return;
         }
 
         const soraPromptSection = soraPromptMatch[1].trim();
+
+        // Detectar personajes
+        const detectedCharacters = detectCharacters(soraPromptSection);
+        setCharacters(detectedCharacters);
 
         // Dividir por [cut] dentro de la sección de Sora
         const shotTexts = soraPromptSection.split(/\[cut\]/gi).filter(part => part && part.trim() !== '');
@@ -35,7 +80,56 @@ const ShotBreakdown = ({ script, scriptId }) => {
         }));
 
         setShots(parsedShots);
+        setShowBreakdown(true);
+    };
+
+    React.useEffect(() => {
+        if (!script) return;
+
+        // Auto-parsear solo si encuentra la sección Sora
+        const soraPromptMatch = script.match(/\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)(?=\n\n\*\*|$)/i);
+        if (soraPromptMatch) {
+            parseScript();
+        }
     }, [script]);
+
+    const handleGenerateCharacter = async (charIndex) => {
+        setGeneratingCharacter(charIndex);
+
+        try {
+            const character = characters[charIndex];
+
+            // Crear contexto local basado en la marca
+            let brandContext = '';
+            if (activeBrand) {
+                const location = activeBrand.target_location || 'Chile';
+                const category = activeBrand.category || 'e-commerce';
+                brandContext = `Chilean ${category} brand context. Location: ${location}. `;
+            }
+
+            // Crear prompt enriquecido para el personaje
+            const characterPrompt = `${brandContext}${character.description}. Photorealistic portrait, natural lighting, authentic appearance, facing camera, neutral expression, professional quality.`;
+
+            // Generar imagen del personaje con Nano Banana
+            const result = await mediaGenerationService.generateInfluencerVisual(characterPrompt);
+
+            // Actualizar el personaje con la imagen generada
+            const updatedCharacters = [...characters];
+            updatedCharacters[charIndex] = {
+                ...character,
+                image: result.imageUrl,
+                imagePrompt: characterPrompt
+            };
+            setCharacters(updatedCharacters);
+
+            alert(`✅ Personaje generado: ${character.description}\n\n(Demo mode)`);
+        } catch (error) {
+            console.error('Error generating character:', error);
+            alert('❌ Error al generar personaje');
+        } finally {
+            setGeneratingCharacter(null);
+        }
+    };
 
     const handleGenerateImage = async (shotIndex) => {
         setGeneratingImage(shotIndex);
@@ -102,14 +196,110 @@ const ShotBreakdown = ({ script, scriptId }) => {
         }
     };
 
-    if (!script || shots.length === 0) return null;
+    // Si no hay breakdown, mostrar botón para generarlo manualmente
+    if (!script) return null;
+
+    if (!showBreakdown || shots.length === 0) {
+        const hasSoraPrompt = script.match(/\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)(?=\n\n\*\*|$)/i);
+
+        if (!hasSoraPrompt) {
+            return null; // No hay sección Sora, no mostrar nada
+        }
+
+        return (
+            <div className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg p-6">
+                <div className="text-center">
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">🎬 Desglose de Escenas</h3>
+                    <p className="text-gray-600 mb-4">
+                        Este script contiene un prompt para Sora 2. Genera el desglose de escenas y personajes.
+                    </p>
+                    <button
+                        onClick={parseScript}
+                        className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg font-medium hover:from-blue-600 hover:to-purple-600 transition-all"
+                    >
+                        🎬 Generar Desglose de Escenas
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="mt-6">
+            {/* Header con botón de regenerar */}
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold">🎬 Desglose de Escenas</h3>
-                <span className="text-sm text-gray-500">{shots.length} escenas</span>
+                <div>
+                    <h3 className="text-xl font-bold">🎬 Desglose de Escenas</h3>
+                    <span className="text-sm text-gray-500">
+                        {characters.length > 0 && `${characters.length} personajes • `}
+                        {shots.length} escenas
+                    </span>
+                </div>
+                <button
+                    onClick={parseScript}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-300 transition-colors"
+                >
+                    🔄 Regenerar
+                </button>
             </div>
+
+            {/* Sección de Personajes */}
+            {characters.length > 0 && (
+                <div className="mb-6 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-4">
+                    <h4 className="text-lg font-bold text-purple-900 mb-3">👥 Personajes Detectados</h4>
+                    <p className="text-sm text-purple-700 mb-4">
+                        Genera los personajes primero para usarlos como referencia en las escenas
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {characters.map((character, index) => (
+                            <div
+                                key={character.id}
+                                className="bg-white border-2 border-purple-200 rounded-lg overflow-hidden hover:border-purple-400 transition-colors"
+                            >
+                                {/* Character Preview */}
+                                <div className="relative bg-purple-100 aspect-square flex items-center justify-center">
+                                    {character.image ? (
+                                        <img
+                                            src={character.image}
+                                            alt={character.description}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="text-center p-4">
+                                            <span className="text-6xl mb-2 block">👤</span>
+                                            <p className="text-xs text-purple-600">No generado</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Character Info */}
+                                <div className="p-3 bg-white">
+                                    <p className="text-sm font-semibold text-gray-800 mb-2">
+                                        {character.description}
+                                    </p>
+                                    <button
+                                        onClick={() => handleGenerateCharacter(index)}
+                                        disabled={generatingCharacter === index}
+                                        className={`w-full px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                            character.image
+                                                ? 'bg-green-100 text-green-700 border border-green-300'
+                                                : 'bg-purple-500 text-white hover:bg-purple-600'
+                                        } ${generatingCharacter === index ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        {generatingCharacter === index ? (
+                                            <>⏳ Generando...</>
+                                        ) : character.image ? (
+                                            <>✅ Personaje Generado</>
+                                        ) : (
+                                            <>🎨 Generar Personaje</>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {shots.map((shot, index) => (

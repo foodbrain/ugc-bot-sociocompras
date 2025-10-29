@@ -256,7 +256,7 @@ const ScriptCreator = ({ activeBrand, setScripts }) => {
                         value={generatedScript}
                         className="w-full h-64 p-2 border border-gray-300 rounded-md bg-gray-50 font-mono text-sm"
                     />
-                    <ShotBreakdown script={generatedScript} />
+                    <ShotBreakdown script={generatedScript} activeBrand={activeBrand} />
                 </div>
             )}
         </div>
