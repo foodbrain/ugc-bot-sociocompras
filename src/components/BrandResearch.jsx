@@ -5,29 +5,48 @@ import { storageService } from '../services/storageService';
 
 const BrandResearch = ({ setBrandData }) => {
     const [loading, setLoading] = useState(false);
-    const [enhancedResearch, setEnhancedResearch] = useState(storageService.getEnhancedResearch());
-    const [savedBrandData, setSavedBrandData] = useState(storageService.getBrandData());
+    const [enhancedResearch, setEnhancedResearch] = useState(null);
+    const [savedBrandData, setSavedBrandData] = useState(null);
+
+    // Load data on mount
+    React.useEffect(() => {
+        const loadData = async () => {
+            try {
+                const brandData = await storageService.getBrandData();
+                const researchData = await storageService.getEnhancedResearch();
+                setSavedBrandData(brandData);
+                setEnhancedResearch(researchData);
+            } catch (error) {
+                console.error('Error loading brand data:', error);
+            }
+        };
+        loadData();
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
-        setBrandData(data);
-        setSavedBrandData(data);
-        alert('✅ Datos de marca guardados!');
-
         setLoading(true);
         try {
+            // Save brand data to Firebase
+            await storageService.saveBrandData(data);
+            setBrandData(data);
+            setSavedBrandData(data);
+
             console.log('Iniciando análisis con Gemini AI...');
             const enhanced = await geminiService.enhanceBrandResearch(data);
             console.log('Análisis recibido:', enhanced);
+
+            // Save enhanced research to Firebase
+            await storageService.saveEnhancedResearch(enhanced);
             setEnhancedResearch(enhanced);
-            storageService.saveEnhancedResearch(enhanced);
-            alert('✅ ¡Análisis AI completado!');
+
+            alert('✅ Datos guardados y análisis AI completado!');
         } catch (error) {
             console.error('Error enhancing research:', error);
-            alert('⚠️ Datos guardados, pero el análisis AI falló: ' + error.message);
+            alert('❌ Error: ' + error.message);
         } finally {
             setLoading(false);
         }

@@ -17,31 +17,21 @@ const App = () => {
 
     useEffect(() => {
         const loadData = async () => {
-            const savedBrandData = storageService.getBrandData();
-            const savedIdeas = await storageService.getIdeas();
-            const savedScripts = await storageService.getScripts();
+            try {
+                const savedBrandData = await storageService.getBrandData();
+                const savedIdeas = await storageService.getIdeas();
+                const savedScripts = await storageService.getScripts();
 
-            if (savedBrandData) setBrandData(savedBrandData);
-            if (savedIdeas) setIdeas(savedIdeas);
-            if (savedScripts) setScripts(savedScripts);
+                if (savedBrandData) setBrandData(savedBrandData);
+                if (savedIdeas) setIdeas(savedIdeas);
+                if (savedScripts) setScripts(savedScripts);
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
         };
 
         loadData();
     }, []);
-
-    useEffect(() => {
-        if (brandData) {
-            storageService.saveBrandData(brandData);
-        }
-    }, [brandData]);
-
-    useEffect(() => {
-        storageService.saveIdeas(ideas);
-    }, [ideas]);
-
-    useEffect(() => {
-        storageService.saveScripts(scripts);
-    }, [scripts]);
 
     const handleOpenWorkspace = (ideaId) => {
         setWorkspaceIdeaId(ideaId);

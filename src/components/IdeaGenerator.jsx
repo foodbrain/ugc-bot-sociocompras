@@ -21,11 +21,11 @@ const IdeaGenerator = ({ setIdeas, onOpenWorkspace }) => {
     const generateIdeas = async () => {
         setLoading(true);
         try {
-            const brandData = storageService.getBrandData();
+            const brandData = await storageService.getBrandData();
             const ideas = await geminiService.generateIdeas(brandData, 5, useViralResearch, ideaType);
 
             // Guardar ideas automáticamente
-            const savedNewIdeas = await storageService.addMultipleIdeas(ideas);
+            await storageService.saveIdeas(ideas);
 
             // Actualizar la lista
             const allIdeas = await storageService.getIdeas();
@@ -49,18 +49,20 @@ const IdeaGenerator = ({ setIdeas, onOpenWorkspace }) => {
     const generateScriptForIdea = async (idea) => {
         setGeneratingScriptFor(idea.id);
         try {
-            const brandData = storageService.getBrandData();
+            const brandData = await storageService.getBrandData();
             const concept = `${idea.title}\n\n${idea.description}\n\nHook: ${idea.hook}`;
 
             // Pasar el objeto idea completo para que generateScript pueda detectar tipo UGC
             const script = await geminiService.generateScript(concept, brandData, idea);
 
             // Guardar el script
-            const savedScript = storageService.addScript({
+            await storageService.saveScript({
                 ideaId: idea.id,
                 ideaTitle: idea.title,
                 content: script,
-                concept: concept
+                concept: concept,
+                generatedWithAI: true,
+                ranking: 0
             });
 
             alert(`✅ Script generado y guardado para: "${idea.title}"`);
@@ -73,7 +75,7 @@ const IdeaGenerator = ({ setIdeas, onOpenWorkspace }) => {
     };
 
     const updateRanking = async (ideaId, newRanking) => {
-        await storageService.updateIdeaRanking(ideaId, newRanking);
+        await storageService.updateIdea(ideaId, { ranking: newRanking });
         const updatedIdeas = await storageService.getIdeas();
         setSavedIdeas(updatedIdeas.sort((a, b) => (b.ranking || 0) - (a.ranking || 0)));
     };
