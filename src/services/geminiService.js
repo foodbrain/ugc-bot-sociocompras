@@ -3,6 +3,27 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(API_KEY);
 
+// Utilidad para manejar rate limiting con reintentos
+const withRetry = async (fn, maxRetries = 3, baseDelay = 2000) => {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      // Si es error 429 (rate limit) y no es el último intento
+      if (error.message?.includes('429') && i < maxRetries - 1) {
+        const delay = baseDelay * Math.pow(2, i); // Exponential backoff
+        console.warn(`⚠️ Rate limit alcanzado. Reintentando en ${delay}ms... (intento ${i + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+};
+
+// Delay entre llamadas para evitar rate limiting
+const delayBetweenCalls = (ms = 1000) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const geminiService = {
   async enhanceBrandResearch(brandData) {
     try {
@@ -497,9 +518,12 @@ Genera el prompt completo optimizado para Sora 2 en formato de texto continuo, s
 `;
       }
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      return response.text();
+      // Usar withRetry para manejar rate limiting
+      return await withRetry(async () => {
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        return response.text();
+      });
     } catch (error) {
       console.error('Error generating script:', error);
       throw new Error('Failed to generate script with AI');

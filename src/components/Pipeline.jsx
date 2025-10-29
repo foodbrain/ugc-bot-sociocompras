@@ -65,25 +65,44 @@ const Pipeline = ({ brandData: activeBrand }) => {
             setProgress(prev => ({ ...prev, 3: 'completed' }));
             await sleep(1000);
 
-            // Step 4: Create Scripts (solo para las primeras 3 ideas)
+            // Step 4: Create Scripts (solo para las primeras 3 ideas) - SECUENCIAL para evitar rate limiting
             setCurrentStep(4);
             setProgress(prev => ({ ...prev, 4: 'running' }));
-            console.log('📝 Creando scripts para las primeras 3 ideas...');
-            const scriptsPromises = ideasWithIds
-                .slice(0, 3)
-                .map(idea =>
-                    geminiService.generateScript(`${idea.title}\n\n${idea.description}\n\nHook: ${idea.hook}`, activeBrand, idea)
-                        .then(script => ({
-                            ideaId: idea.id,
-                            ideaTitle: idea.title,
-                            brandId: activeBrand.id,
-                            concept: `${idea.title}\n\n${idea.description}`,
-                            content: script,
-                            enabled: true
-                        }))
-                );
+            console.log('📝 Creando scripts para las primeras 3 ideas (secuencial)...');
 
-            const scripts = await Promise.all(scriptsPromises);
+            const scripts = [];
+            const ideasToProcess = ideasWithIds.slice(0, 3);
+
+            for (let i = 0; i < ideasToProcess.length; i++) {
+                const idea = ideasToProcess[i];
+                console.log(`📝 Generando script ${i + 1}/${ideasToProcess.length} para: ${idea.title}`);
+
+                try {
+                    const script = await geminiService.generateScript(
+                        `${idea.title}\n\n${idea.description}\n\nHook: ${idea.hook}`,
+                        activeBrand,
+                        idea
+                    );
+
+                    scripts.push({
+                        ideaId: idea.id,
+                        ideaTitle: idea.title,
+                        brandId: activeBrand.id,
+                        concept: `${idea.title}\n\n${idea.description}`,
+                        content: script,
+                        enabled: true
+                    });
+
+                    // Delay de 1 segundo entre llamadas para evitar rate limiting
+                    if (i < ideasToProcess.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                } catch (error) {
+                    console.error(`❌ Error generando script para ${idea.title}:`, error);
+                    // Continuar con el siguiente script incluso si uno falla
+                }
+            }
+
             setGeneratedScripts(scripts);
             setProgress(prev => ({ ...prev, 4: 'completed' }));
 
