@@ -103,7 +103,7 @@ export const firebaseService = {
     }
   },
 
-  async getIdeas() {
+  async getIdeas(brandId = null) {
     if (!this.isConfigured()) {
       throw new Error('Firebase not configured.');
     }
@@ -115,11 +115,14 @@ export const firebaseService = {
       const ideas = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        ideas.push({
-          id: doc.id,
-          ...data,
-          timestamp: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
-        });
+        // Filter by brandId if provided
+        if (!brandId || data.brandId === brandId) {
+          ideas.push({
+            id: doc.id,
+            ...data,
+            timestamp: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+          });
+        }
       });
 
       return ideas;
@@ -192,7 +195,7 @@ export const firebaseService = {
     }
   },
 
-  async getScripts() {
+  async getScripts(brandId = null) {
     if (!this.isConfigured()) {
       throw new Error('Firebase not configured.');
     }
@@ -204,11 +207,14 @@ export const firebaseService = {
       const scripts = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        scripts.push({
-          id: doc.id,
-          ...data,
-          timestamp: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
-        });
+        // Filter by brandId if provided
+        if (!brandId || data.brandId === brandId) {
+          scripts.push({
+            id: doc.id,
+            ...data,
+            timestamp: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+          });
+        }
       });
 
       return scripts;
@@ -335,173 +341,188 @@ export const firebaseService = {
   },
 
   /**
-   * BRAND DATA Operations
+   * BRANDS Operations - Multiple brands support
    */
-  async saveBrandData(brandData) {
+  async createBrand(brandData) {
     if (!this.isConfigured()) {
       throw new Error('Firebase not configured.');
     }
 
     try {
-      // Check if brand data already exists
-      const existingData = await this.getBrandData();
-
-      if (existingData) {
-        // Update existing document
-        const docRef = doc(db, 'brandData', existingData.id);
-        await updateDoc(docRef, {
-          ...brandData,
-          updatedAt: serverTimestamp()
-        });
-
-        return {
-          id: existingData.id,
-          ...brandData
-        };
-      } else {
-        // Create new document
-        const docRef = await addDoc(collection(db, 'brandData'), {
-          ...brandData,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-
-        return {
-          id: docRef.id,
-          ...brandData
-        };
-      }
-    } catch (error) {
-      console.error('Error saving brand data:', error);
-      throw error;
-    }
-  },
-
-  async getBrandData() {
-    if (!this.isConfigured()) {
-      throw new Error('Firebase not configured.');
-    }
-
-    try {
-      const querySnapshot = await getDocs(collection(db, 'brandData'));
-
-      if (querySnapshot.empty) {
-        return null;
-      }
-
-      // Return the first (and should be only) brand data document
-      const doc = querySnapshot.docs[0];
-      const data = doc.data();
+      const docRef = await addDoc(collection(db, 'brands'), {
+        ...brandData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
 
       return {
-        id: doc.id,
-        ...data
+        id: docRef.id,
+        ...brandData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
     } catch (error) {
-      console.error('Error getting brand data:', error);
+      console.error('Error creating brand:', error);
       throw error;
     }
   },
 
-  async deleteBrandData() {
+  async getAllBrands() {
     if (!this.isConfigured()) {
       throw new Error('Firebase not configured.');
     }
 
     try {
-      const existingData = await this.getBrandData();
+      const q = query(collection(db, 'brands'), orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
 
-      if (existingData) {
-        await deleteDoc(doc(db, 'brandData', existingData.id));
-        return true;
+      const brands = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        brands.push({
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
+          updatedAt: data.updatedAt ? data.updatedAt.toDate().toISOString() : new Date().toISOString()
+        });
+      });
+
+      return brands;
+    } catch (error) {
+      console.error('Error getting brands:', error);
+      throw error;
+    }
+  },
+
+  async getBrand(brandId) {
+    if (!this.isConfigured()) {
+      throw new Error('Firebase not configured.');
+    }
+
+    try {
+      const docRef = doc(db, 'brands', brandId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
+          updatedAt: data.updatedAt ? data.updatedAt.toDate().toISOString() : new Date().toISOString()
+        };
       }
 
-      return false;
+      return null;
     } catch (error) {
-      console.error('Error deleting brand data:', error);
+      console.error('Error getting brand:', error);
+      throw error;
+    }
+  },
+
+  async updateBrand(brandId, updates) {
+    if (!this.isConfigured()) {
+      throw new Error('Firebase not configured.');
+    }
+
+    try {
+      const brandRef = doc(db, 'brands', brandId);
+      await updateDoc(brandRef, {
+        ...updates,
+        updatedAt: serverTimestamp()
+      });
+
+      return { id: brandId, ...updates };
+    } catch (error) {
+      console.error('Error updating brand:', error);
+      throw error;
+    }
+  },
+
+  async deleteBrand(brandId) {
+    if (!this.isConfigured()) {
+      throw new Error('Firebase not configured.');
+    }
+
+    try {
+      await deleteDoc(doc(db, 'brands', brandId));
+      return true;
+    } catch (error) {
+      console.error('Error deleting brand:', error);
       throw error;
     }
   },
 
   /**
    * BRAND ANALYSIS Operations (Enhanced Research from Gemini AI)
+   * Now linked to brandId
    */
-  async saveBrandAnalysis(analysisData) {
+  async saveBrandAnalysis(brandId, analysisData) {
     if (!this.isConfigured()) {
       throw new Error('Firebase not configured.');
     }
 
     try {
-      // Check if analysis already exists
-      const existingAnalysis = await this.getBrandAnalysis();
+      // Save analysis linked to brand
+      const docRef = await addDoc(collection(db, 'brandAnalysis'), {
+        brandId,
+        ...analysisData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
 
-      if (existingAnalysis) {
-        // Update existing document
-        const docRef = doc(db, 'brandAnalysis', existingAnalysis.id);
-        await updateDoc(docRef, {
-          ...analysisData,
-          updatedAt: serverTimestamp()
-        });
-
-        return {
-          id: existingAnalysis.id,
-          ...analysisData
-        };
-      } else {
-        // Create new document
-        const docRef = await addDoc(collection(db, 'brandAnalysis'), {
-          ...analysisData,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-
-        return {
-          id: docRef.id,
-          ...analysisData
-        };
-      }
+      return {
+        id: docRef.id,
+        brandId,
+        ...analysisData
+      };
     } catch (error) {
       console.error('Error saving brand analysis:', error);
       throw error;
     }
   },
 
-  async getBrandAnalysis() {
+  async getBrandAnalysis(brandId) {
     if (!this.isConfigured()) {
       throw new Error('Firebase not configured.');
     }
 
     try {
-      const querySnapshot = await getDocs(collection(db, 'brandAnalysis'));
+      const q = query(
+        collection(db, 'brandAnalysis'),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
 
-      if (querySnapshot.empty) {
-        return null;
-      }
+      // Find analysis for this brand
+      let analysis = null;
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.brandId === brandId && !analysis) {
+          analysis = {
+            id: doc.id,
+            ...data
+          };
+        }
+      });
 
-      // Return the first (and should be only) brand analysis document
-      const doc = querySnapshot.docs[0];
-      const data = doc.data();
-
-      return {
-        id: doc.id,
-        ...data
-      };
+      return analysis;
     } catch (error) {
       console.error('Error getting brand analysis:', error);
       throw error;
     }
   },
 
-  async deleteBrandAnalysis() {
+  async deleteBrandAnalysis(brandId) {
     if (!this.isConfigured()) {
       throw new Error('Firebase not configured.');
     }
 
     try {
-      const existingAnalysis = await this.getBrandAnalysis();
+      const analysis = await this.getBrandAnalysis(brandId);
 
-      if (existingAnalysis) {
-        await deleteDoc(doc(db, 'brandAnalysis', existingAnalysis.id));
+      if (analysis) {
+        await deleteDoc(doc(db, 'brandAnalysis', analysis.id));
         return true;
       }
 

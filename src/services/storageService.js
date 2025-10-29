@@ -12,47 +12,91 @@ export const storageService = {
   },
 
   /**
-   * Brand Data - Uses Firebase ONLY
+   * BRANDS - Multiple brands support
    */
-  async saveBrandData(data) {
+  async createBrand(brandData) {
     if (!firebaseService.isConfigured()) {
       throw new Error('Firebase not configured. Please check your environment variables.');
     }
 
     try {
-      await firebaseService.saveBrandData(data);
-      console.log('✅ Brand data saved to Firebase');
-      return true;
+      const brand = await firebaseService.createBrand(brandData);
+      console.log('✅ Brand created in Firebase');
+      return brand;
     } catch (error) {
-      console.error('❌ Error saving brand data to Firebase:', error);
+      console.error('❌ Error creating brand in Firebase:', error);
       throw error;
     }
   },
 
-  async getBrandData() {
+  async getAllBrands() {
     if (!firebaseService.isConfigured()) {
       throw new Error('Firebase not configured. Please check your environment variables.');
     }
 
     try {
-      const data = await firebaseService.getBrandData();
-      return data;
+      const brands = await firebaseService.getAllBrands();
+      return brands;
     } catch (error) {
-      console.error('❌ Error getting brand data from Firebase:', error);
+      console.error('❌ Error getting brands from Firebase:', error);
+      throw error;
+    }
+  },
+
+  async getBrand(brandId) {
+    if (!firebaseService.isConfigured()) {
+      throw new Error('Firebase not configured. Please check your environment variables.');
+    }
+
+    try {
+      const brand = await firebaseService.getBrand(brandId);
+      return brand;
+    } catch (error) {
+      console.error('❌ Error getting brand from Firebase:', error);
+      throw error;
+    }
+  },
+
+  async updateBrand(brandId, updates) {
+    if (!firebaseService.isConfigured()) {
+      throw new Error('Firebase not configured. Please check your environment variables.');
+    }
+
+    try {
+      await firebaseService.updateBrand(brandId, updates);
+      console.log(`✅ Brand ${brandId} updated in Firebase`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating brand in Firebase:', error);
+      throw error;
+    }
+  },
+
+  async deleteBrand(brandId) {
+    if (!firebaseService.isConfigured()) {
+      throw new Error('Firebase not configured. Please check your environment variables.');
+    }
+
+    try {
+      await firebaseService.deleteBrand(brandId);
+      console.log(`✅ Brand ${brandId} deleted from Firebase`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error deleting brand from Firebase:', error);
       throw error;
     }
   },
 
   /**
-   * Enhanced Research (Brand Analysis) - Uses Firebase ONLY
+   * Brand Analysis (linked to brandId)
    */
-  async saveEnhancedResearch(data) {
+  async saveBrandAnalysis(brandId, analysisData) {
     if (!firebaseService.isConfigured()) {
       throw new Error('Firebase not configured. Please check your environment variables.');
     }
 
     try {
-      await firebaseService.saveBrandAnalysis(data);
+      await firebaseService.saveBrandAnalysis(brandId, analysisData);
       console.log('✅ Brand analysis saved to Firebase');
       return true;
     } catch (error) {
@@ -61,14 +105,14 @@ export const storageService = {
     }
   },
 
-  async getEnhancedResearch() {
+  async getBrandAnalysis(brandId) {
     if (!firebaseService.isConfigured()) {
       throw new Error('Firebase not configured. Please check your environment variables.');
     }
 
     try {
-      const data = await firebaseService.getBrandAnalysis();
-      return data;
+      const analysis = await firebaseService.getBrandAnalysis(brandId);
+      return analysis;
     } catch (error) {
       console.error('❌ Error getting brand analysis from Firebase:', error);
       throw error;
@@ -99,13 +143,13 @@ export const storageService = {
     }
   },
 
-  async getIdeas() {
+  async getIdeas(brandId = null) {
     if (!firebaseService.isConfigured()) {
       throw new Error('Firebase not configured. Please check your environment variables.');
     }
 
     try {
-      const ideas = await firebaseService.getIdeas();
+      const ideas = await firebaseService.getIdeas(brandId);
       return ideas || [];
     } catch (error) {
       console.error('❌ Error getting ideas from Firebase:', error);
@@ -161,13 +205,13 @@ export const storageService = {
     }
   },
 
-  async getScripts() {
+  async getScripts(brandId = null) {
     if (!firebaseService.isConfigured()) {
       throw new Error('Firebase not configured. Please check your environment variables.');
     }
 
     try {
-      const scripts = await firebaseService.getScripts();
+      const scripts = await firebaseService.getScripts(brandId);
       return scripts || [];
     } catch (error) {
       console.error('❌ Error getting scripts from Firebase:', error);
