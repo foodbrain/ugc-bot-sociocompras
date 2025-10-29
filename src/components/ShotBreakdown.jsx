@@ -51,10 +51,10 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
     const parseScript = () => {
         if (!script) return;
 
-        // Buscar sección del prompt de Sora - múltiples variaciones
+        // Buscar sección del prompt de Sora - buscar múltiples variaciones del título
         const soraPatterns = [
-            /\*\*Prompt Completo para Sora 2:\*\*\s*([\s\S]+?)$/im,
             /\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)$/im,
+            /\*\*Prompt Completo (?:Optimizado )?para Sora 2[:\s]*(?:\(Texto Continuo\))?\*\*\s*([\s\S]+?)$/im,
             /Prompt para Sora 2:\s*([\s\S]+?)$/im
         ];
 
@@ -63,12 +63,14 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
             const match = script.match(pattern);
             if (match) {
                 soraPromptSection = match[1].trim();
+                console.log('✅ Found Sora section with pattern:', pattern.toString());
                 break;
             }
         }
 
         if (!soraPromptSection) {
-            console.warn('No se encontró la sección de prompt para Sora 2 en el script');
+            console.warn('❌ No se encontró la sección de prompt para Sora 2 en el script');
+            console.log('Script preview:', script.substring(0, 500));
             setShots([]);
             setCharacters([]);
             return;
@@ -81,44 +83,33 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
         console.log('👥 Detected characters:', detectedCharacters.length);
         setCharacters(detectedCharacters);
 
-        // Dividir escenas - soportar múltiples formatos
-        let shotTexts = [];
+        // Dividir escenas - soportar [cut] y [Cut] (mayúscula/minúscula)
+        const cutPattern = /\[cut\]/gi; // Case insensitive
 
-        // Método 1: Por marcadores [cut]
-        if (soraPromptSection.includes('[cut]')) {
-            shotTexts = soraPromptSection.split(/\[cut\]/gi).filter(part => part && part.trim() !== '');
-            console.log('🎬 Shots found using [cut] markers:', shotTexts.length);
-        }
-        // Método 2: Por **[Toma X]** o [Toma X]
-        else if (soraPromptSection.match(/\[Toma \d+\]/i)) {
-            const tomaMatches = soraPromptSection.split(/\*{0,2}\[Toma \d+\]\*{0,2}:/gi);
-            // El primer elemento suele ser texto antes de la primera toma, lo descartamos si está vacío
-            shotTexts = tomaMatches.filter(part => part && part.trim() !== '');
-            console.log('🎬 Shots found using [Toma X] markers:', shotTexts.length);
-        }
-        // Método 3: Si no hay marcadores específicos, dividir por "Then" o similar
-        else {
-            shotTexts = [soraPromptSection];
-            console.log('🎬 No markers found, treating as single shot');
+        if (!soraPromptSection.match(cutPattern)) {
+            console.warn('❌ No se encontraron marcadores [cut] en el prompt');
+            console.log('Prompt preview:', soraPromptSection.substring(0, 300));
+            setShots([]);
+            setCharacters([]);
+            return;
         }
 
-        // Limpiar cada shot
-        const parsedShots = shotTexts.map((shotText, index) => {
-            // Remover posibles marcadores residuales al inicio
-            let cleanedText = shotText
-                .replace(/^\s*\*{0,2}\[Toma \d+\]\*{0,2}:\s*/i, '')
-                .replace(/^\s*\[cut\]\s*/i, '')
-                .trim();
+        const shotTexts = soraPromptSection
+            .split(cutPattern)
+            .map(shot => shot.trim())
+            .filter(shot => shot.length > 20); // Filtrar shots muy cortos
 
-            return {
-                id: `shot-${index}`,
-                content: cleanedText,
-                image: null,
-                video: null,
-                generatingImage: false,
-                generatingVideo: false
-            };
-        }).filter(shot => shot.content.length > 10); // Filtrar shots muy cortos
+        console.log('🎬 Shots found:', shotTexts.length);
+
+        // Crear los shots
+        const parsedShots = shotTexts.map((shotText, index) => ({
+            id: `shot-${index}`,
+            content: shotText,
+            image: null,
+            video: null,
+            generatingImage: false,
+            generatingVideo: false
+        }));
 
         console.log('✅ Final shots parsed:', parsedShots.length);
         setShots(parsedShots);
