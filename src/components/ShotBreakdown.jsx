@@ -122,6 +122,7 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
         // Auto-parsear solo si encuentra la sección Sora (cualquier variación)
         const hasSoraPrompt =
             script.includes('**Prompt Completo para Sora 2:**') ||
+            script.includes('**Prompt Completo Optimizado para Sora 2') ||
             script.includes('**Prompt para Sora 2:**') ||
             script.includes('Prompt para Sora 2:');
 
