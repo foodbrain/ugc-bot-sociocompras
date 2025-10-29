@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { geminiService } from '../services/geminiService';
 import { storageService } from '../services/storageService';
 
-const Pipeline = ({ brandData }) => {
+const Pipeline = ({ brandData: activeBrand }) => {
     const [isRunning, setIsRunning] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
     const [generatedIdeas, setGeneratedIdeas] = useState([]);
@@ -11,15 +11,15 @@ const Pipeline = ({ brandData }) => {
     const [generatingScriptFor, setGeneratingScriptFor] = useState(null);
 
     const steps = [
-        { id: 1, name: 'Brand Research', icon: '🔍', status: brandData ? 'completed' : 'pending' },
+        { id: 1, name: 'Brand Research', icon: '🔍', status: activeBrand ? 'completed' : 'pending' },
         { id: 2, name: 'AI Analysis', icon: '🤖', status: 'pending' },
         { id: 3, name: 'Generate Ideas', icon: '💡', status: 'pending' },
         { id: 4, name: 'Create Scripts', icon: '📝', status: 'pending' },
     ];
 
     const runPipeline = async () => {
-        if (!brandData) {
-            alert('⚠️ Primero completa el Brand Research');
+        if (!activeBrand) {
+            alert('⚠️ Primero selecciona una marca en Brand Research');
             return;
         }
 
@@ -31,44 +31,52 @@ const Pipeline = ({ brandData }) => {
         try {
             // Step 1: Brand Research (ya completado)
             setCurrentStep(1);
-            setProgress({ ...progress, 1: 'completed' });
+            setProgress({ 1: 'completed' });
             await sleep(500);
 
-            // Step 2: AI Analysis
+            // Step 2: AI Analysis (verificar si existe, si no, generar)
             setCurrentStep(2);
-            setProgress({ ...progress, 2: 'running' });
-            console.log('🤖 Ejecutando análisis AI...');
-            const enhanced = await geminiService.enhanceBrandResearch(brandData);
-            storageService.saveEnhancedResearch(enhanced);
-            setProgress({ ...progress, 2: 'completed' });
+            setProgress(prev => ({ ...prev, 2: 'running' }));
+            console.log('🤖 Verificando análisis AI...');
+
+            let analysis = await storageService.getBrandAnalysis(activeBrand.id);
+            if (!analysis) {
+                console.log('🤖 Generando nuevo análisis AI...');
+                const enhanced = await geminiService.enhanceBrandResearch(activeBrand);
+                await storageService.saveBrandAnalysis(activeBrand.id, enhanced);
+            }
+
+            setProgress(prev => ({ ...prev, 2: 'completed' }));
             await sleep(1000);
 
             // Step 3: Generate Ideas
             setCurrentStep(3);
-            setProgress({ ...progress, 3: 'running' });
+            setProgress(prev => ({ ...prev, 3: 'running' }));
             console.log('💡 Generando ideas...');
-            const ideas = await geminiService.generateIdeas(brandData, 5);
+            const ideas = await geminiService.generateIdeas(activeBrand, 5);
             const ideasWithIds = ideas.map((idea, index) => ({
                 ...idea,
                 id: Date.now().toString() + index,
+                brandId: activeBrand.id,
                 enabled: true,
                 timestamp: new Date().toISOString()
             }));
             setGeneratedIdeas(ideasWithIds);
-            setProgress({ ...progress, 3: 'completed' });
+            setProgress(prev => ({ ...prev, 3: 'completed' }));
             await sleep(1000);
 
             // Step 4: Create Scripts (solo para las primeras 3 ideas)
             setCurrentStep(4);
-            setProgress({ ...progress, 4: 'running' });
+            setProgress(prev => ({ ...prev, 4: 'running' }));
             console.log('📝 Creando scripts para las primeras 3 ideas...');
             const scriptsPromises = ideasWithIds
                 .slice(0, 3)
                 .map(idea =>
-                    geminiService.generateScript(`${idea.title}\n\n${idea.description}\n\nHook: ${idea.hook}`, brandData)
+                    geminiService.generateScript(`${idea.title}\n\n${idea.description}\n\nHook: ${idea.hook}`, activeBrand, idea)
                         .then(script => ({
                             ideaId: idea.id,
                             ideaTitle: idea.title,
+                            brandId: activeBrand.id,
                             concept: `${idea.title}\n\n${idea.description}`,
                             content: script,
                             enabled: true
@@ -77,7 +85,7 @@ const Pipeline = ({ brandData }) => {
 
             const scripts = await Promise.all(scriptsPromises);
             setGeneratedScripts(scripts);
-            setProgress({ ...progress, 4: 'completed' });
+            setProgress(prev => ({ ...prev, 4: 'completed' }));
 
             alert('✅ ¡Pipeline completado exitosamente!');
         } catch (error) {
@@ -103,11 +111,12 @@ const Pipeline = ({ brandData }) => {
         setGeneratingScriptFor(idea.id);
         try {
             const concept = `${idea.title}\n\n${idea.description}\n\nHook: ${idea.hook}`;
-            const script = await geminiService.generateScript(concept, brandData);
+            const script = await geminiService.generateScript(concept, activeBrand, idea);
 
             const newScript = {
                 ideaId: idea.id,
                 ideaTitle: idea.title,
+                brandId: activeBrand.id,
                 concept: concept,
                 content: script,
                 enabled: true
@@ -123,7 +132,7 @@ const Pipeline = ({ brandData }) => {
         }
     };
 
-    const saveSelectedIdeas = () => {
+    const saveSelectedIdeas = async () => {
         const selectedIdeas = generatedIdeas.filter(idea => idea.enabled);
 
         if (selectedIdeas.length === 0) {
@@ -131,16 +140,24 @@ const Pipeline = ({ brandData }) => {
             return;
         }
 
-        // Guardar ideas seleccionadas
-        storageService.addMultipleIdeas(selectedIdeas);
+        try {
+            // Guardar ideas seleccionadas
+            await storageService.saveIdeas(selectedIdeas);
 
-        // Guardar sus scripts correspondientes
-        const scriptsToSave = generatedScripts.filter(script =>
-            selectedIdeas.some(idea => idea.id === script.ideaId)
-        );
-        storageService.addMultipleScripts(scriptsToSave);
+            // Guardar sus scripts correspondientes
+            const scriptsToSave = generatedScripts.filter(script =>
+                selectedIdeas.some(idea => idea.id === script.ideaId)
+            );
 
-        alert(`✅ ${selectedIdeas.length} ideas y ${scriptsToSave.length} scripts guardados!\n\nPuedes verlos en las secciones "Ideas" y "Scripts".`);
+            for (const script of scriptsToSave) {
+                await storageService.saveScript(script);
+            }
+
+            alert(`✅ ${selectedIdeas.length} ideas y ${scriptsToSave.length} scripts guardados!\n\nPuedes verlos en las secciones "Ideas" y "Scripts".`);
+        } catch (error) {
+            console.error('Error saving ideas/scripts:', error);
+            alert('❌ Error al guardar. Intenta de nuevo.');
+        }
     };
 
     return (
@@ -151,9 +168,9 @@ const Pipeline = ({ brandData }) => {
                     <h2 className="text-2xl font-bold text-gray-900">🚀 Pipeline de Generación</h2>
                     <button
                         onClick={runPipeline}
-                        disabled={isRunning || !brandData}
+                        disabled={isRunning || !activeBrand}
                         className={`px-6 py-3 rounded-lg font-medium flex items-center gap-2 ${
-                            isRunning || !brandData
+                            isRunning || !activeBrand
                                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 : 'bg-green-500 text-white hover:bg-green-600'
                         }`}
@@ -184,12 +201,12 @@ const Pipeline = ({ brandData }) => {
                                                 ? 'bg-green-500 border-green-600 text-white'
                                                 : progress[step.id] === 'running' || currentStep === step.id
                                                 ? 'bg-blue-500 border-blue-600 text-white animate-pulse'
-                                                : brandData && step.id === 1
+                                                : activeBrand && step.id === 1
                                                 ? 'bg-green-500 border-green-600 text-white'
                                                 : 'bg-gray-200 border-gray-300'
                                         }`}
                                     >
-                                        {progress[step.id] === 'completed' || (brandData && step.id === 1) ? '✓' : step.icon}
+                                        {progress[step.id] === 'completed' || (activeBrand && step.id === 1) ? '✓' : step.icon}
                                     </div>
 
                                     {/* Label */}
@@ -198,7 +215,7 @@ const Pipeline = ({ brandData }) => {
                                         <div className="text-xs text-gray-500">
                                             {progress[step.id] === 'running' ? 'En proceso...' :
                                              progress[step.id] === 'completed' ? 'Completado' :
-                                             brandData && step.id === 1 ? 'Completado' :
+                                             activeBrand && step.id === 1 ? 'Completado' :
                                              'Pendiente'}
                                         </div>
                                     </div>
@@ -208,7 +225,7 @@ const Pipeline = ({ brandData }) => {
                                 {index < steps.length - 1 && (
                                     <div
                                         className={`absolute top-8 left-1/2 w-full h-1 ${
-                                            progress[step.id] === 'completed' || (brandData && step.id === 1)
+                                            progress[step.id] === 'completed' || (activeBrand && step.id === 1)
                                                 ? 'bg-green-500'
                                                 : 'bg-gray-300'
                                         }`}
