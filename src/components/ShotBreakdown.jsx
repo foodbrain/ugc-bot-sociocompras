@@ -10,36 +10,29 @@ const ShotBreakdown = ({ script, scriptId }) => {
     React.useEffect(() => {
         if (!script) return;
 
-        // Create a regex from the transitions to split the script
-        const regex = new RegExp(`(${TRANSITIONS.join('|').replace('[','\\[').replace(']','\\]')})`, 'gi');
-        const parts = script.split(regex).filter(part => part && part.trim() !== '');
+        // Extraer SOLO la sección "Prompt para Sora 2:"
+        const soraPromptMatch = script.match(/\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)(?=\n\n\*\*|$)/i);
 
-        // Group shots with their preceding transitions
-        const parsedShots = [];
-        let currentShot = parts[0];
-        for (let i = 1; i < parts.length; i++) {
-            if (regex.test(parts[i])) {
-                parsedShots.push({
-                    id: `shot-${parsedShots.length}`,
-                    content: currentShot.trim(),
-                    image: null,
-                    video: null,
-                    generatingImage: false,
-                    generatingVideo: false
-                });
-                currentShot = parts[i];
-            } else {
-                currentShot += parts[i];
-            }
+        if (!soraPromptMatch) {
+            // Si no se encuentra la sección específica, no mostrar shots
+            setShots([]);
+            return;
         }
-        parsedShots.push({
-            id: `shot-${parsedShots.length}`,
-            content: currentShot.trim(),
+
+        const soraPromptSection = soraPromptMatch[1].trim();
+
+        // Dividir por [cut] dentro de la sección de Sora
+        const shotTexts = soraPromptSection.split(/\[cut\]/gi).filter(part => part && part.trim() !== '');
+
+        // Crear los shots
+        const parsedShots = shotTexts.map((shotText, index) => ({
+            id: `shot-${index}`,
+            content: shotText.trim(),
             image: null,
             video: null,
             generatingImage: false,
             generatingVideo: false
-        });
+        }));
 
         setShots(parsedShots);
     }, [script]);
@@ -114,8 +107,8 @@ const ShotBreakdown = ({ script, scriptId }) => {
     return (
         <div className="mt-6">
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold">Shot Breakdown</h3>
-                <span className="text-sm text-gray-500">{shots.length} shots</span>
+                <h3 className="text-xl font-bold">🎬 Desglose de Escenas</h3>
+                <span className="text-sm text-gray-500">{shots.length} escenas</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -127,7 +120,7 @@ const ShotBreakdown = ({ script, scriptId }) => {
                         {/* Header */}
                         <div className="bg-gradient-to-r from-blue-500 to-purple-500 px-4 py-2 flex items-center justify-between">
                             <span className="text-white font-bold text-sm">
-                                **Prompt {index + 1}**
+                                🎬 Escena {index + 1}
                             </span>
                             <span className="text-xs bg-white/20 px-2 py-1 rounded text-white">
                                 {shot.image && shot.video ? '✅ Complete' :
