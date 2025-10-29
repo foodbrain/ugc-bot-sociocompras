@@ -436,10 +436,15 @@ Información de la marca:
 - Nombre: ${brandData.brand_name || 'La marca'}
 - Website: ${brandData.brand_domain || 'No especificado'}
 - Categoría: ${brandData.category || 'No especificada'}
+- Ubicación/Mercado: ${brandData.target_location || 'No especificada'}
+- Idioma: ${brandData.language || 'Español'}
 - Propuesta de Valor: ${brandData.uvp || 'No especificada'}
 - Audiencia: ${brandData.audience || 'Audiencia general'}
+- Demografia Objetivo: ${brandData.target_demographics || 'General'}
 - Puntos de Dolor: ${brandData.pain_points || 'No especificados'}
 - Tono de Voz: ${brandData.brand_voice || 'Auténtico y conversacional'}
+
+IMPORTANTE: Todo el texto, diálogos y voiceover del script DEBE estar en ${brandData.language || 'Español'}. Los personajes deben representar auténticamente la demografía de ${brandData.target_location || 'la región objetivo'}.
 ` : '';
 
       // Verificar si es una idea de tipo UGC con frames

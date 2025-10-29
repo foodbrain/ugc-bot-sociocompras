@@ -13,15 +13,23 @@ export const mediaGenerationService = {
   /**
    * Generate AI Influencer visual using configured image provider
    * @param {string} influencerDescription - Detailed description of the AI influencer
+   * @param {Object} brandResearch - Brand research data for context (optional)
    * @returns {Promise<Object>} - Generated image data
    */
-  async generateInfluencerVisual(influencerDescription) {
+  async generateInfluencerVisual(influencerDescription, brandResearch = null) {
     try {
       console.log(`🖼️ Generating influencer visual with ${IMAGE_API_PROVIDER}...`);
       console.log('Description:', influencerDescription);
+      if (brandResearch) {
+        console.log('Brand Context:', {
+          location: brandResearch.target_location,
+          demographics: brandResearch.target_demographics,
+          language: brandResearch.language
+        });
+      }
 
-      // Paso 1: Usar Gemini para optimizar el prompt
-      const optimizedPrompt = await this.optimizeImagePromptWithGemini(influencerDescription);
+      // Paso 1: Usar Gemini para optimizar el prompt con contexto de marca
+      const optimizedPrompt = await this.optimizeImagePromptWithGemini(influencerDescription, brandResearch);
       console.log('✨ Optimized prompt:', optimizedPrompt);
 
       // Paso 2: Generar imagen según el provider configurado
@@ -61,32 +69,49 @@ export const mediaGenerationService = {
   },
 
   /**
-   * Usar Gemini para optimizar el prompt de imagen
+   * Usar Gemini para optimizar el prompt de imagen con contexto de Brand Research
+   * @param {string} description - Character description from script
+   * @param {Object} brandResearch - Brand research data with demographics, location, language, etc.
    */
-  async optimizeImagePromptWithGemini(description) {
+  async optimizeImagePromptWithGemini(description, brandResearch = null) {
     try {
-      const optimizationPrompt = `
-You are an expert at creating prompts for AI image generation models like DALL-E 3, Stable Diffusion, and Imagen 3.
+      // Build brand context from Brand Research
+      let brandContext = '';
+      if (brandResearch) {
+        const location = brandResearch.target_location || 'Latin America';
+        const demographics = brandResearch.target_demographics || 'General audience';
+        const language = brandResearch.language || 'Spanish';
+        const category = brandResearch.category || 'e-commerce';
 
-Given this character/scene description:
+        brandContext = `
+Brand Context:
+- Target Location: ${location}
+- Target Demographics: ${demographics}
+- Language: ${language}
+- Category: ${category}
+
+Use this context to inform the influencer's appearance, style, and cultural background.
+The influencer should authentically represent the target demographic and location.
+`;
+      }
+
+      const optimizationPrompt = `You are a prompt engineer.
+
+${brandContext}
+
+AI Influencer Description:
 "${description}"
 
-Create an optimized, detailed prompt for generating a photorealistic image. Include:
-1. Physical appearance details (age, ethnicity, hair, clothing, expression)
-2. Camera angle and framing (portrait, medium shot, close-up)
-3. Lighting (natural, soft, golden hour, studio)
-4. Background and environment
-5. Style keywords (photorealistic, ultra-realistic, high detail, professional photography)
-6. Format specifications (9:16 vertical, smartphone photo aesthetic)
+Use the AI influencer description to write a prompt for an AI text to image model. Optimize for photorealism & advertising use cases keeping a very authentic and natural touch (iPhone photo, UGC style).
 
-IMPORTANT:
-- Focus on visual details only
-- Use descriptive adjectives
-- Avoid abstract concepts
-- Keep it under 300 words
+The prompt must only describe the influencer. They must not be interacting with the product.
 
-Output ONLY the optimized prompt text, nothing else.
-`;
+Use web search to get the most recent prompt recommendations for the latest models like Imagen4, GPT image-1 or Flux. Avoid prompt advice made for Stable Diffusion or Midjourney.
+
+EXAMPLE OUTPUT FORMAT:
+"A candid, authentic UGC-style photo of a 23-year-old woman of Brazilian and Japanese descent. Her long, iridescent silver-lavender hair is styled in soft, natural waves that catch the light. She has warm, almond-shaped eyes and a serene, confident expression. She is in a minimalist room with soft, diffused morning light filtering in from a nearby window. She is wearing a simple, structured white crop top and flowing silk cargo pants, accessorized with unique, sculptural silver jewelry. The image feels like a spontaneous, unfiltered moment captured on a high-end smartphone, with realistic skin texture and a natural, relaxed pose."
+
+Only return your best prompt. Nothing else.`;
 
       // Llamar a Gemini para optimizar el prompt
       const optimized = await geminiService.generateContent(optimizationPrompt);

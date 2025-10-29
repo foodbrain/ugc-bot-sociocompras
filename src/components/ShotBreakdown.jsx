@@ -137,33 +137,27 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
         try {
             const character = characters[charIndex];
 
-            // Crear contexto local basado en la marca
-            let brandContext = '';
-            if (activeBrand) {
-                const location = activeBrand.target_location || 'Chile';
-                const category = activeBrand.category || 'e-commerce';
-                brandContext = `Chilean ${category} brand context. Location: ${location}. `;
-            }
-
-            // Crear prompt enriquecido para el personaje
-            const characterPrompt = `${brandContext}${character.description}. Photorealistic portrait, natural lighting, authentic appearance, facing camera, neutral expression, professional quality.`;
-
-            // Generar imagen del personaje con Nano Banana
-            const result = await mediaGenerationService.generateInfluencerVisual(characterPrompt);
+            // Pasar solo la descripción del personaje y el Brand Research completo
+            // El servicio se encargará de construir el prompt enriquecido con Gemini
+            const result = await mediaGenerationService.generateInfluencerVisual(
+                character.description,
+                activeBrand // Pasar todo el objeto de Brand Research
+            );
 
             // Actualizar el personaje con la imagen generada
             const updatedCharacters = [...characters];
             updatedCharacters[charIndex] = {
                 ...character,
                 image: result.imageUrl,
-                imagePrompt: characterPrompt
+                imagePrompt: result.prompt // Usar el prompt optimizado por Gemini
             };
             setCharacters(updatedCharacters);
 
-            alert(`✅ Personaje generado: ${character.description}\n\n(Demo mode)`);
+            console.log('✅ Character generated with optimized prompt:', result.prompt);
+            alert(`✅ Personaje generado: ${character.description}`);
         } catch (error) {
             console.error('Error generating character:', error);
-            alert('❌ Error al generar personaje');
+            alert('❌ Error al generar personaje: ' + error.message);
         } finally {
             setGeneratingCharacter(null);
         }
