@@ -31,8 +31,10 @@ let db;
 
 try {
   app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
+  // Connect to specific Firestore database: basededatos-contenidos
+  db = getFirestore(app, 'basededatos-contenidos');
   console.log('✅ Firebase initialized successfully');
+  console.log('✅ Connected to Firestore database: basededatos-contenidos');
 } catch (error) {
   console.error('❌ Firebase initialization error:', error);
   console.log('⚠️ Fallback to localStorage mode');
@@ -328,6 +330,184 @@ export const firebaseService = {
       return media;
     } catch (error) {
       console.error('Error getting generated media:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * BRAND DATA Operations
+   */
+  async saveBrandData(brandData) {
+    if (!this.isConfigured()) {
+      throw new Error('Firebase not configured.');
+    }
+
+    try {
+      // Check if brand data already exists
+      const existingData = await this.getBrandData();
+
+      if (existingData) {
+        // Update existing document
+        const docRef = doc(db, 'brandData', existingData.id);
+        await updateDoc(docRef, {
+          ...brandData,
+          updatedAt: serverTimestamp()
+        });
+
+        return {
+          id: existingData.id,
+          ...brandData
+        };
+      } else {
+        // Create new document
+        const docRef = await addDoc(collection(db, 'brandData'), {
+          ...brandData,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+
+        return {
+          id: docRef.id,
+          ...brandData
+        };
+      }
+    } catch (error) {
+      console.error('Error saving brand data:', error);
+      throw error;
+    }
+  },
+
+  async getBrandData() {
+    if (!this.isConfigured()) {
+      throw new Error('Firebase not configured.');
+    }
+
+    try {
+      const querySnapshot = await getDocs(collection(db, 'brandData'));
+
+      if (querySnapshot.empty) {
+        return null;
+      }
+
+      // Return the first (and should be only) brand data document
+      const doc = querySnapshot.docs[0];
+      const data = doc.data();
+
+      return {
+        id: doc.id,
+        ...data
+      };
+    } catch (error) {
+      console.error('Error getting brand data:', error);
+      throw error;
+    }
+  },
+
+  async deleteBrandData() {
+    if (!this.isConfigured()) {
+      throw new Error('Firebase not configured.');
+    }
+
+    try {
+      const existingData = await this.getBrandData();
+
+      if (existingData) {
+        await deleteDoc(doc(db, 'brandData', existingData.id));
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error deleting brand data:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * BRAND ANALYSIS Operations (Enhanced Research from Gemini AI)
+   */
+  async saveBrandAnalysis(analysisData) {
+    if (!this.isConfigured()) {
+      throw new Error('Firebase not configured.');
+    }
+
+    try {
+      // Check if analysis already exists
+      const existingAnalysis = await this.getBrandAnalysis();
+
+      if (existingAnalysis) {
+        // Update existing document
+        const docRef = doc(db, 'brandAnalysis', existingAnalysis.id);
+        await updateDoc(docRef, {
+          ...analysisData,
+          updatedAt: serverTimestamp()
+        });
+
+        return {
+          id: existingAnalysis.id,
+          ...analysisData
+        };
+      } else {
+        // Create new document
+        const docRef = await addDoc(collection(db, 'brandAnalysis'), {
+          ...analysisData,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+
+        return {
+          id: docRef.id,
+          ...analysisData
+        };
+      }
+    } catch (error) {
+      console.error('Error saving brand analysis:', error);
+      throw error;
+    }
+  },
+
+  async getBrandAnalysis() {
+    if (!this.isConfigured()) {
+      throw new Error('Firebase not configured.');
+    }
+
+    try {
+      const querySnapshot = await getDocs(collection(db, 'brandAnalysis'));
+
+      if (querySnapshot.empty) {
+        return null;
+      }
+
+      // Return the first (and should be only) brand analysis document
+      const doc = querySnapshot.docs[0];
+      const data = doc.data();
+
+      return {
+        id: doc.id,
+        ...data
+      };
+    } catch (error) {
+      console.error('Error getting brand analysis:', error);
+      throw error;
+    }
+  },
+
+  async deleteBrandAnalysis() {
+    if (!this.isConfigured()) {
+      throw new Error('Firebase not configured.');
+    }
+
+    try {
+      const existingAnalysis = await this.getBrandAnalysis();
+
+      if (existingAnalysis) {
+        await deleteDoc(doc(db, 'brandAnalysis', existingAnalysis.id));
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error deleting brand analysis:', error);
       throw error;
     }
   }

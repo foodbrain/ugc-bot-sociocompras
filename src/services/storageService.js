@@ -37,20 +37,50 @@ export const storageService = {
   },
 
   /**
-   * Brand Data - Always uses localStorage
+   * Brand Data - Uses Firebase (with localStorage fallback)
    */
-  saveBrandData(data) {
+  async saveBrandData(data) {
     try {
-      localStorage.setItem(STORAGE_KEYS.BRAND_DATA, JSON.stringify(data));
-      return true;
+      if (shouldUseFirebase()) {
+        // Try Firebase first
+        try {
+          await firebaseService.saveBrandData(data);
+          // Also save to localStorage as backup
+          localStorage.setItem(STORAGE_KEYS.BRAND_DATA, JSON.stringify(data));
+          return true;
+        } catch (firebaseError) {
+          console.error('Firebase error, falling back to localStorage:', firebaseError);
+          localStorage.setItem(STORAGE_KEYS.BRAND_DATA, JSON.stringify(data));
+          return true;
+        }
+      } else {
+        // Use localStorage only
+        localStorage.setItem(STORAGE_KEYS.BRAND_DATA, JSON.stringify(data));
+        return true;
+      }
     } catch (error) {
       console.error('Error saving brand data:', error);
       return false;
     }
   },
 
-  getBrandData() {
+  async getBrandData() {
     try {
+      if (shouldUseFirebase()) {
+        // Try Firebase first
+        try {
+          const firebaseData = await firebaseService.getBrandData();
+          if (firebaseData) {
+            // Update localStorage cache
+            localStorage.setItem(STORAGE_KEYS.BRAND_DATA, JSON.stringify(firebaseData));
+            return firebaseData;
+          }
+        } catch (firebaseError) {
+          console.error('Firebase error, falling back to localStorage:', firebaseError);
+        }
+      }
+
+      // Fallback to localStorage
       const data = localStorage.getItem(STORAGE_KEYS.BRAND_DATA);
       return data ? JSON.parse(data) : null;
     } catch (error) {
@@ -60,20 +90,50 @@ export const storageService = {
   },
 
   /**
-   * Enhanced Research - Always uses localStorage
+   * Enhanced Research (Brand Analysis) - Uses Firebase (with localStorage fallback)
    */
-  saveEnhancedResearch(data) {
+  async saveEnhancedResearch(data) {
     try {
-      localStorage.setItem(STORAGE_KEYS.ENHANCED_RESEARCH, JSON.stringify(data));
-      return true;
+      if (shouldUseFirebase()) {
+        // Try Firebase first
+        try {
+          await firebaseService.saveBrandAnalysis(data);
+          // Also save to localStorage as backup
+          localStorage.setItem(STORAGE_KEYS.ENHANCED_RESEARCH, JSON.stringify(data));
+          return true;
+        } catch (firebaseError) {
+          console.error('Firebase error, falling back to localStorage:', firebaseError);
+          localStorage.setItem(STORAGE_KEYS.ENHANCED_RESEARCH, JSON.stringify(data));
+          return true;
+        }
+      } else {
+        // Use localStorage only
+        localStorage.setItem(STORAGE_KEYS.ENHANCED_RESEARCH, JSON.stringify(data));
+        return true;
+      }
     } catch (error) {
       console.error('Error saving enhanced research:', error);
       return false;
     }
   },
 
-  getEnhancedResearch() {
+  async getEnhancedResearch() {
     try {
+      if (shouldUseFirebase()) {
+        // Try Firebase first
+        try {
+          const firebaseData = await firebaseService.getBrandAnalysis();
+          if (firebaseData) {
+            // Update localStorage cache
+            localStorage.setItem(STORAGE_KEYS.ENHANCED_RESEARCH, JSON.stringify(firebaseData));
+            return firebaseData;
+          }
+        } catch (firebaseError) {
+          console.error('Firebase error, falling back to localStorage:', firebaseError);
+        }
+      }
+
+      // Fallback to localStorage
       const data = localStorage.getItem(STORAGE_KEYS.ENHANCED_RESEARCH);
       return data ? JSON.parse(data) : null;
     } catch (error) {
