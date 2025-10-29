@@ -52,22 +52,27 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
         if (!script) return;
 
         // Extraer SOLO la sección "Prompt para Sora 2:"
-        const soraPromptMatch = script.match(/\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)(?=\n\n\*\*|$)/i);
+        // Buscar desde "**Prompt para Sora 2:**" hasta el final o el siguiente título
+        const soraPromptMatch = script.match(/\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)$/im);
 
         if (!soraPromptMatch) {
+            console.warn('No se encontró la sección "Prompt para Sora 2:" en el script');
             setShots([]);
             setCharacters([]);
             return;
         }
 
         const soraPromptSection = soraPromptMatch[1].trim();
+        console.log('📝 Sora Prompt Section Length:', soraPromptSection.length, 'characters');
 
         // Detectar personajes
         const detectedCharacters = detectCharacters(soraPromptSection);
+        console.log('👥 Detected characters:', detectedCharacters.length);
         setCharacters(detectedCharacters);
 
         // Dividir por [cut] dentro de la sección de Sora
         const shotTexts = soraPromptSection.split(/\[cut\]/gi).filter(part => part && part.trim() !== '');
+        console.log('🎬 Shots found:', shotTexts.length);
 
         // Crear los shots
         const parsedShots = shotTexts.map((shotText, index) => ({
@@ -87,7 +92,7 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
         if (!script) return;
 
         // Auto-parsear solo si encuentra la sección Sora
-        const soraPromptMatch = script.match(/\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)(?=\n\n\*\*|$)/i);
+        const soraPromptMatch = script.match(/\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)$/im);
         if (soraPromptMatch) {
             parseScript();
         }
@@ -200,7 +205,7 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
     if (!script) return null;
 
     if (!showBreakdown || shots.length === 0) {
-        const hasSoraPrompt = script.match(/\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)(?=\n\n\*\*|$)/i);
+        const hasSoraPrompt = script.match(/\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)$/im);
 
         if (!hasSoraPrompt) {
             return null; // No hay sección Sora, no mostrar nada
@@ -211,11 +216,11 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
                 <div className="text-center">
                     <h3 className="text-xl font-bold text-gray-800 mb-2">🎬 Desglose de Escenas</h3>
                     <p className="text-gray-600 mb-4">
-                        Este script contiene un prompt para Sora 2. Genera el desglose de escenas y personajes.
+                        Este script contiene un prompt para Sora 2. Haz clic para generar el desglose de escenas y personajes.
                     </p>
                     <button
                         onClick={parseScript}
-                        className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg font-medium hover:from-blue-600 hover:to-purple-600 transition-all"
+                        className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg font-medium hover:from-blue-600 hover:to-purple-600 transition-all shadow-lg hover:shadow-xl"
                     >
                         🎬 Generar Desglose de Escenas
                     </button>
