@@ -498,8 +498,18 @@ REGLAS IMPORTANTES:
 - Mantener continuidad visual entre frames
 - El influencer debe verse consistente en Frame 1 y 2
 
-Formato de salida:
-Genera el prompt como texto continuo y fluido, separando los 3 frames con [CUT TO:] y describiendo cada escena en detalle cinematográfico para Sora 2.
+**FORMATO DE SALIDA REQUERIDO:**
+
+Debes incluir una sección titulada exactamente así:
+
+**Prompt para Sora 2:**
+
+Dentro de esa sección, escribe el prompt como texto continuo y fluido, separando CADA frame/escena con el marcador [cut].
+
+Ejemplo de formato:
+**Prompt para Sora 2:**
+
+Frame 1 description here with all details... [cut] Frame 2 description continues... [cut] Frame 3 final description...
 `;
       } else {
         // Prompt original para ideas no-UGC
@@ -529,7 +539,21 @@ Crea un script detallado para Sora 2 que incluya:
    - Como si fuera filmado en un smartphone
    - Auténtico y sin filtros
 
-Genera el prompt completo optimizado para Sora 2 en formato de texto continuo, separando cada toma con transiciones naturales ([cut], then, suddenly, finally).
+**FORMATO DE SALIDA OBLIGATORIO:**
+
+Tu respuesta DEBE incluir una sección titulada exactamente:
+
+**Prompt para Sora 2:**
+
+Dentro de esa sección, escribe el prompt como texto continuo describiendo cada escena en detalle.
+IMPORTANTE: Separa CADA escena/toma con el marcador [cut] (en minúsculas, entre corchetes).
+
+Ejemplo de formato correcto:
+**Prompt para Sora 2:**
+
+A woman in her 30s, wearing casual clothes, sitting in her living room with natural lighting... [cut] The camera cuts to a close-up of her hands holding the product... [cut] She looks directly at the camera with an authentic smile...
+
+NO uses otros formatos como [Toma 1]:, [CUT TO:], etc. SOLO usa [cut] entre escenas.
 `;
       }
 
