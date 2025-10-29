@@ -1,27 +1,30 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { geminiService } from '../services/geminiService';
 import { storageService } from '../services/storageService';
+import BrandSelector from './BrandSelector';
 
-const BrandResearch = ({ setBrandData }) => {
+const BrandResearch = ({ activeBrand, onBrandChange }) => {
     const [loading, setLoading] = useState(false);
     const [enhancedResearch, setEnhancedResearch] = useState(null);
-    const [savedBrandData, setSavedBrandData] = useState(null);
+    const [showForm, setShowForm] = useState(false);
 
-    // Load data on mount
-    React.useEffect(() => {
-        const loadData = async () => {
-            try {
-                const brandData = await storageService.getBrandData();
-                const researchData = await storageService.getEnhancedResearch();
-                setSavedBrandData(brandData);
-                setEnhancedResearch(researchData);
-            } catch (error) {
-                console.error('Error loading brand data:', error);
+    // Load analysis for active brand
+    useEffect(() => {
+        const loadAnalysis = async () => {
+            if (activeBrand) {
+                try {
+                    const analysis = await storageService.getBrandAnalysis(activeBrand.id);
+                    setEnhancedResearch(analysis);
+                } catch (error) {
+                    console.error('Error loading brand analysis:', error);
+                }
+            } else {
+                setEnhancedResearch(null);
             }
         };
-        loadData();
-    }, []);
+        loadAnalysis();
+    }, [activeBrand]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -30,22 +33,26 @@ const BrandResearch = ({ setBrandData }) => {
 
         setLoading(true);
         try {
-            // Save brand data to Firebase
-            await storageService.saveBrandData(data);
-            setBrandData(data);
-            setSavedBrandData(data);
+            // Create new brand
+            const newBrand = await storageService.createBrand(data);
 
             console.log('Iniciando análisis con Gemini AI...');
             const enhanced = await geminiService.enhanceBrandResearch(data);
             console.log('Análisis recibido:', enhanced);
 
-            // Save enhanced research to Firebase
-            await storageService.saveEnhancedResearch(enhanced);
+            // Save analysis linked to brand
+            await storageService.saveBrandAnalysis(newBrand.id, enhanced);
             setEnhancedResearch(enhanced);
 
-            alert('✅ Datos guardados y análisis AI completado!');
+            // Set as active brand
+            onBrandChange(newBrand);
+
+            // Hide form
+            setShowForm(false);
+
+            alert('✅ Marca creada y análisis AI completado!');
         } catch (error) {
-            console.error('Error enhancing research:', error);
+            console.error('Error creating brand:', error);
             alert('❌ Error: ' + error.message);
         } finally {
             setLoading(false);
@@ -54,76 +61,80 @@ const BrandResearch = ({ setBrandData }) => {
 
     return (
         <div>
-            <h2 className="text-2xl font-bold mb-4">Brand Research</h2>
+            <h2 className="text-2xl font-bold mb-4">🏢 Brand Research</h2>
 
-            {/* Tabla de datos guardados */}
-            {savedBrandData && (
+            {/* Brand Selector */}
+            <div className="mb-6">
+                <BrandSelector
+                    activeBrand={activeBrand}
+                    onBrandChange={onBrandChange}
+                    onCreateNew={() => setShowForm(true)}
+                />
+            </div>
+
+            {/* Show Analysis if brand is selected */}
+            {activeBrand && enhancedResearch && (
                 <div className="mb-6 bg-white p-6 shadow rounded">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">📊 Datos Guardados</h3>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Nombre de la Marca
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Objetivos de Marketing
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Estado
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                <tr>
-                                    <td className="px-4 py-4 whitespace-nowrap">
-                                        <div className="flex items-center">
-                                            <div className="text-sm font-medium text-gray-900">
-                                                {savedBrandData.brand_name || 'No especificado'}
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-4">
-                                        <div className="text-sm text-gray-900">
-                                            {savedBrandData.marketing_goals || 'No especificado'}
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-4 whitespace-nowrap">
-                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                            enhancedResearch
-                                                ? 'bg-green-100 text-green-800'
-                                                : 'bg-yellow-100 text-yellow-800'
-                                        }`}>
-                                            {enhancedResearch ? '✓ Analizado' : '⏳ Pendiente análisis'}
-                                        </span>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                            <span className="text-gray-500">Website:</span>
-                            <p className="font-medium">{savedBrandData.brand_domain || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <span className="text-gray-500">Categoría:</span>
-                            <p className="font-medium">{savedBrandData.category || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <span className="text-gray-500">Tono de Voz:</span>
-                            <p className="font-medium">{savedBrandData.brand_voice || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <span className="text-gray-500">Competidores:</span>
-                            <p className="font-medium">{savedBrandData.competitors || 'N/A'}</p>
-                        </div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                        🤖 Análisis AI para: {activeBrand.brand_name}
+                    </h3>
+
+                    <div className="space-y-4">
+                        {enhancedResearch.valueAnalysis && (
+                            <div>
+                                <h4 className="font-semibold text-gray-700 mb-2">📊 Análisis de Propuesta de Valor:</h4>
+                                <p className="text-gray-600 text-sm whitespace-pre-wrap">{enhancedResearch.valueAnalysis}</p>
+                            </div>
+                        )}
+
+                        {enhancedResearch.audienceInsights && (
+                            <div>
+                                <h4 className="font-semibold text-gray-700 mb-2">👥 Insights de Audiencia:</h4>
+                                <p className="text-gray-600 text-sm whitespace-pre-wrap">{enhancedResearch.audienceInsights}</p>
+                            </div>
+                        )}
+
+                        {enhancedResearch.painPointRecommendations && (
+                            <div>
+                                <h4 className="font-semibold text-gray-700 mb-2">💡 Recomendaciones para Pain Points:</h4>
+                                <p className="text-gray-600 text-sm whitespace-pre-wrap">{enhancedResearch.painPointRecommendations}</p>
+                            </div>
+                        )}
+
+                        {enhancedResearch.brandPositioning && (
+                            <div>
+                                <h4 className="font-semibold text-gray-700 mb-2">🎯 Posicionamiento de Marca:</h4>
+                                <p className="text-gray-600 text-sm whitespace-pre-wrap">{enhancedResearch.brandPositioning}</p>
+                            </div>
+                        )}
+
+                        {enhancedResearch.ugcOpportunities && enhancedResearch.ugcOpportunities.length > 0 && (
+                            <div>
+                                <h4 className="font-semibold text-gray-700 mb-2">🎬 Oportunidades de Contenido UGC:</h4>
+                                <ul className="list-disc list-inside space-y-1">
+                                    {enhancedResearch.ugcOpportunities.map((opportunity, index) => (
+                                        <li key={index} className="text-gray-600 text-sm">{opportunity}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
 
+            {/* New Brand Form */}
+            {showForm && (
             <form onSubmit={handleSubmit} className="bg-white p-6 shadow rounded">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold">➕ Nueva Marca</h3>
+                    <button
+                        type="button"
+                        onClick={() => setShowForm(false)}
+                        className="text-gray-500 hover:text-gray-700"
+                    >
+                        ✕ Cerrar
+                    </button>
+                </div>
                 {/* Información Básica de la Marca */}
                 <div className="mb-6 pb-6 border-b border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4">Información Básica</h3>
@@ -264,57 +275,30 @@ SOLUCIÓN: Red de distribución local, entrega en 24 horas."
                     </div>
                 </div>
 
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className={`w-full px-4 py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-medium ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                    {loading ? '🤖 Analizando con Gemini AI...' : '✨ Guardar y Analizar con AI'}
-                </button>
+                <div className="flex justify-end gap-3">
+                    <button
+                        type="button"
+                        onClick={() => setShowForm(false)}
+                        className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className={`px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 ${
+                            loading ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                    >
+                        {loading ? '⏳ Analizando con AI...' : '🚀 Crear Marca y Analizar'}
+                    </button>
+                </div>
             </form>
+            )}
 
-            {enhancedResearch && (
-                <div className="mt-6 bg-white p-6 shadow rounded">
-                    <h3 className="text-xl font-bold mb-4 text-green-600">Análisis AI Completado</h3>
-
-                    {enhancedResearch.valueAnalysis && (
-                        <div className="mb-4">
-                            <h4 className="font-semibold text-gray-700 mb-2">Análisis de Propuesta de Valor</h4>
-                            <p className="text-gray-600 whitespace-pre-wrap">{enhancedResearch.valueAnalysis}</p>
-                        </div>
-                    )}
-
-                    {enhancedResearch.audienceInsights && (
-                        <div className="mb-4">
-                            <h4 className="font-semibold text-gray-700 mb-2">Insights de Audiencia</h4>
-                            <p className="text-gray-600 whitespace-pre-wrap">{enhancedResearch.audienceInsights}</p>
-                        </div>
-                    )}
-
-                    {enhancedResearch.painPointRecommendations && (
-                        <div className="mb-4">
-                            <h4 className="font-semibold text-gray-700 mb-2">Recomendaciones para Puntos de Dolor</h4>
-                            <p className="text-gray-600 whitespace-pre-wrap">{enhancedResearch.painPointRecommendations}</p>
-                        </div>
-                    )}
-
-                    {enhancedResearch.brandPositioning && (
-                        <div className="mb-4">
-                            <h4 className="font-semibold text-gray-700 mb-2">Posicionamiento de Marca</h4>
-                            <p className="text-gray-600 whitespace-pre-wrap">{enhancedResearch.brandPositioning}</p>
-                        </div>
-                    )}
-
-                    {enhancedResearch.ugcOpportunities && enhancedResearch.ugcOpportunities.length > 0 && (
-                        <div className="mb-4">
-                            <h4 className="font-semibold text-gray-700 mb-2">Oportunidades de Contenido UGC</h4>
-                            <ul className="list-disc list-inside text-gray-600">
-                                {enhancedResearch.ugcOpportunities.map((opportunity, index) => (
-                                    <li key={index} className="mb-1">{opportunity}</li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
+            {!activeBrand && !showForm && (
+                <div className="bg-white p-8 shadow rounded text-center text-gray-500">
+                    <p className="mb-4">Selecciona una marca o crea una nueva para comenzar</p>
                 </div>
             )}
         </div>
