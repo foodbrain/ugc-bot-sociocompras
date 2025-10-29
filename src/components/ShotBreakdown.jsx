@@ -51,18 +51,29 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
     const parseScript = () => {
         if (!script) return;
 
-        // Extraer SOLO la sección "Prompt para Sora 2:"
-        // Buscar desde "**Prompt para Sora 2:**" hasta el final o el siguiente título
-        const soraPromptMatch = script.match(/\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)$/im);
+        // Buscar sección del prompt de Sora - múltiples variaciones
+        const soraPatterns = [
+            /\*\*Prompt Completo para Sora 2:\*\*\s*([\s\S]+?)$/im,
+            /\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)$/im,
+            /Prompt para Sora 2:\s*([\s\S]+?)$/im
+        ];
 
-        if (!soraPromptMatch) {
-            console.warn('No se encontró la sección "Prompt para Sora 2:" en el script');
+        let soraPromptSection = null;
+        for (const pattern of soraPatterns) {
+            const match = script.match(pattern);
+            if (match) {
+                soraPromptSection = match[1].trim();
+                break;
+            }
+        }
+
+        if (!soraPromptSection) {
+            console.warn('No se encontró la sección de prompt para Sora 2 en el script');
             setShots([]);
             setCharacters([]);
             return;
         }
 
-        const soraPromptSection = soraPromptMatch[1].trim();
         console.log('📝 Sora Prompt Section Length:', soraPromptSection.length, 'characters');
 
         // Detectar personajes
@@ -70,20 +81,46 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
         console.log('👥 Detected characters:', detectedCharacters.length);
         setCharacters(detectedCharacters);
 
-        // Dividir por [cut] dentro de la sección de Sora
-        const shotTexts = soraPromptSection.split(/\[cut\]/gi).filter(part => part && part.trim() !== '');
-        console.log('🎬 Shots found:', shotTexts.length);
+        // Dividir escenas - soportar múltiples formatos
+        let shotTexts = [];
 
-        // Crear los shots
-        const parsedShots = shotTexts.map((shotText, index) => ({
-            id: `shot-${index}`,
-            content: shotText.trim(),
-            image: null,
-            video: null,
-            generatingImage: false,
-            generatingVideo: false
-        }));
+        // Método 1: Por marcadores [cut]
+        if (soraPromptSection.includes('[cut]')) {
+            shotTexts = soraPromptSection.split(/\[cut\]/gi).filter(part => part && part.trim() !== '');
+            console.log('🎬 Shots found using [cut] markers:', shotTexts.length);
+        }
+        // Método 2: Por **[Toma X]** o [Toma X]
+        else if (soraPromptSection.match(/\[Toma \d+\]/i)) {
+            const tomaMatches = soraPromptSection.split(/\*{0,2}\[Toma \d+\]\*{0,2}:/gi);
+            // El primer elemento suele ser texto antes de la primera toma, lo descartamos si está vacío
+            shotTexts = tomaMatches.filter(part => part && part.trim() !== '');
+            console.log('🎬 Shots found using [Toma X] markers:', shotTexts.length);
+        }
+        // Método 3: Si no hay marcadores específicos, dividir por "Then" o similar
+        else {
+            shotTexts = [soraPromptSection];
+            console.log('🎬 No markers found, treating as single shot');
+        }
 
+        // Limpiar cada shot
+        const parsedShots = shotTexts.map((shotText, index) => {
+            // Remover posibles marcadores residuales al inicio
+            let cleanedText = shotText
+                .replace(/^\s*\*{0,2}\[Toma \d+\]\*{0,2}:\s*/i, '')
+                .replace(/^\s*\[cut\]\s*/i, '')
+                .trim();
+
+            return {
+                id: `shot-${index}`,
+                content: cleanedText,
+                image: null,
+                video: null,
+                generatingImage: false,
+                generatingVideo: false
+            };
+        }).filter(shot => shot.content.length > 10); // Filtrar shots muy cortos
+
+        console.log('✅ Final shots parsed:', parsedShots.length);
         setShots(parsedShots);
         setShowBreakdown(true);
     };
@@ -91,9 +128,13 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
     React.useEffect(() => {
         if (!script) return;
 
-        // Auto-parsear solo si encuentra la sección Sora
-        const soraPromptMatch = script.match(/\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)$/im);
-        if (soraPromptMatch) {
+        // Auto-parsear solo si encuentra la sección Sora (cualquier variación)
+        const hasSoraPrompt =
+            script.includes('**Prompt Completo para Sora 2:**') ||
+            script.includes('**Prompt para Sora 2:**') ||
+            script.includes('Prompt para Sora 2:');
+
+        if (hasSoraPrompt) {
             parseScript();
         }
     }, [script]);
@@ -205,7 +246,10 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
     if (!script) return null;
 
     if (!showBreakdown || shots.length === 0) {
-        const hasSoraPrompt = script.match(/\*\*Prompt para Sora 2:\*\*\s*([\s\S]+?)$/im);
+        const hasSoraPrompt =
+            script.includes('**Prompt Completo para Sora 2:**') ||
+            script.includes('**Prompt para Sora 2:**') ||
+            script.includes('Prompt para Sora 2:');
 
         if (!hasSoraPrompt) {
             return null; // No hay sección Sora, no mostrar nada
