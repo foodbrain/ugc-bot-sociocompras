@@ -11,6 +11,48 @@ const STABILITY_API_KEY = import.meta.env.VITE_STABILITY_API_KEY;
 
 export const mediaGenerationService = {
   /**
+   * Generate image directly with a pre-optimized prompt (for editable prompts)
+   * @param {string} optimizedPrompt - Already enriched prompt
+   * @returns {Promise<Object>} - Generated image data
+   */
+  async generateInfluencerVisualWithPrompt(optimizedPrompt) {
+    try {
+      console.log(`🖼️ Generating image with ${IMAGE_API_PROVIDER} using custom prompt...`);
+      console.log('✨ Using prompt:', optimizedPrompt.substring(0, 100) + '...');
+
+      let imageResult;
+
+      switch (IMAGE_API_PROVIDER) {
+        case 'vertex-ai':
+          imageResult = await this.generateWithVertexAI(optimizedPrompt);
+          break;
+
+        case 'openai':
+          imageResult = await this.generateWithOpenAI(optimizedPrompt);
+          break;
+
+        case 'stability':
+          imageResult = await this.generateWithStability(optimizedPrompt);
+          break;
+
+        default:
+          throw new Error(`Provider no configurado: ${IMAGE_API_PROVIDER}. Configure VITE_IMAGE_API_PROVIDER en .env con: 'openai', 'vertex-ai', o 'stability'`);
+      }
+
+      return {
+        success: true,
+        imageUrl: imageResult.url,
+        prompt: optimizedPrompt,
+        service: IMAGE_API_PROVIDER,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Error generating image with prompt:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Generate AI Influencer visual using configured image provider
    * @param {string} influencerDescription - Detailed description of the AI influencer
    * @param {Object} brandResearch - Brand research data for context (optional)
@@ -93,23 +135,58 @@ The influencer should authentically represent the target demographic and locatio
 `;
       }
 
-      const optimizationPrompt = `You are a prompt engineer.
+      const optimizationPrompt = `You are an expert prompt engineer specializing in photorealistic AI image generation for DALL-E 3, Imagen 4, and similar models.
 
 ${brandContext}
 
 AI Influencer Description:
 "${description}"
 
-Use the AI influencer description to write a prompt for an AI text to image model. Optimize for photorealism & advertising use cases keeping a very authentic and natural touch (iPhone photo, UGC style).
+Your task: Transform this simple description into an EXTREMELY DETAILED, PHOTOREALISTIC prompt that will generate a hyper-realistic UGC-style photo.
 
-The prompt must only describe the influencer. They must not be interacting with the product.
+CRITICAL REQUIREMENTS FOR MAXIMUM REALISM:
 
-Use web search to get the most recent prompt recommendations for the latest models like Imagen4, GPT image-1 or Flux. Avoid prompt advice made for Stable Diffusion or Midjourney.
+1. **Physical Appearance** (be VERY specific):
+   - Exact age (e.g., "27-year-old")
+   - Precise ethnicity/heritage (e.g., "Chilean woman with European and indigenous heritage")
+   - Hair: exact color, texture, length, style (e.g., "shoulder-length chestnut brown hair with natural waves")
+   - Eyes: shape, color, expression (e.g., "warm brown almond-shaped eyes with a genuine smile")
+   - Skin: tone, texture, natural imperfections (e.g., "warm olive skin with natural texture and subtle freckles")
+   - Face: specific features (e.g., "defined cheekbones, natural eyebrows, soft smile lines")
 
-EXAMPLE OUTPUT FORMAT:
-"A candid, authentic UGC-style photo of a 23-year-old woman of Brazilian and Japanese descent. Her long, iridescent silver-lavender hair is styled in soft, natural waves that catch the light. She has warm, almond-shaped eyes and a serene, confident expression. She is in a minimalist room with soft, diffused morning light filtering in from a nearby window. She is wearing a simple, structured white crop top and flowing silk cargo pants, accessorized with unique, sculptural silver jewelry. The image feels like a spontaneous, unfiltered moment captured on a high-end smartphone, with realistic skin texture and a natural, relaxed pose."
+2. **Clothing & Style** (authentic, relatable):
+   - Specific garments (e.g., "cream-colored oversized cotton sweater")
+   - Natural, everyday style (NOT overly styled or perfect)
+   - Minimal, tasteful accessories if any
 
-Only return your best prompt. Nothing else.`;
+3. **Setting & Environment**:
+   - Exact location type (e.g., "bright, airy living room with white walls")
+   - Lighting details (e.g., "soft natural morning light from a large window")
+   - Background elements (e.g., "minimalist decor with a potted plant visible")
+
+4. **Photography Style** (CRITICAL for realism):
+   - "Shot on iPhone 15 Pro in portrait mode"
+   - "Captured in natural lighting"
+   - "Slight depth of field with bokeh background"
+   - "Authentic smartphone photography aesthetic"
+   - "Natural skin texture with pores visible"
+   - "No filters, no airbrushing, raw and authentic"
+
+5. **Mood & Expression**:
+   - Natural, genuine expression (avoid "perfect" smiles)
+   - Relaxed, authentic body language
+   - Candid, unposed moment
+
+6. **Technical Quality**:
+   - "Photorealistic, hyperrealistic"
+   - "High resolution, sharp focus on face"
+   - "Professional photography quality"
+   - "8K quality, extreme detail"
+
+EXAMPLE (follow this level of detail):
+"A photorealistic, candid iPhone 15 Pro portrait of a 29-year-old Chilean woman with warm olive skin showing natural texture and slight freckles across her nose. She has shoulder-length, dark brown hair with natural waves, styled in a relaxed, effortless way. Her warm brown almond-shaped eyes have a genuine, friendly expression with natural smile lines. She's wearing a simple cream-colored linen button-up shirt, partially unbuttoned at the collar. The photo is taken in a bright, minimalist living room with soft, diffused natural morning light streaming through a large window behind her, creating a gentle backlight glow. The background is slightly blurred (bokeh effect) showing white walls and a green potted plant. Shot in portrait mode with shallow depth of field, the focus is sharp on her face, capturing every detail including natural skin texture, individual hair strands, and the subtle play of light in her eyes. The image has the authentic, unfiltered aesthetic of a spontaneous smartphone photo - not overly posed, not airbrushed, just real. Hyperrealistic, 8K quality, professional UGC content style."
+
+Only return your best prompt. Nothing else. No explanations, no markdown, just the prompt.`;
 
       // Llamar a Gemini para optimizar el prompt
       const optimized = await geminiService.generateContent(optimizationPrompt);

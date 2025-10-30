@@ -10,6 +10,8 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
     const [generatingImage, setGeneratingImage] = useState(null);
     const [generatingVideo, setGeneratingVideo] = useState(null);
     const [showBreakdown, setShowBreakdown] = useState(false);
+    const [editingPrompt, setEditingPrompt] = useState(null); // {type: 'character'|'shot', index: number}
+    const [tempPrompt, setTempPrompt] = useState('');
 
     // Detectar personajes en el script
     const detectCharacters = (scriptText) => {
@@ -186,17 +188,56 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
         loadSavedMedia();
     }, [scriptId, shots.length, characters.length]);
 
-    const handleGenerateCharacter = async (charIndex) => {
+    // Paso 1: Enriquecer el prompt y mostrarlo para edición
+    const handleEnrichCharacterPrompt = async (charIndex) => {
         setGeneratingCharacter(charIndex);
 
         try {
             const character = characters[charIndex];
 
-            // Pasar solo la descripción del personaje y el Brand Research completo
-            // El servicio se encargará de construir el prompt enriquecido con Gemini
-            const result = await mediaGenerationService.generateInfluencerVisual(
+            // Generar prompt enriquecido sin crear la imagen todavía
+            const enrichedPrompt = await mediaGenerationService.optimizeImagePromptWithGemini(
                 character.description,
-                activeBrand // Pasar todo el objeto de Brand Research
+                activeBrand
+            );
+
+            console.log('✨ Enriched prompt generated:', enrichedPrompt);
+
+            // Guardar el prompt enriquecido en el personaje para mostrarlo
+            const updatedCharacters = [...characters];
+            updatedCharacters[charIndex] = {
+                ...character,
+                enrichedPrompt: enrichedPrompt
+            };
+            setCharacters(updatedCharacters);
+            setTempPrompt(enrichedPrompt);
+            setEditingPrompt({ type: 'character', index: charIndex });
+
+        } catch (error) {
+            console.error('Error enriching prompt:', error);
+            alert('❌ Error al enriquecer prompt: ' + error.message);
+        } finally {
+            setGeneratingCharacter(null);
+        }
+    };
+
+    // Paso 2: Generar imagen con el prompt (editado o no)
+    const handleGenerateCharacter = async (charIndex, customPrompt = null) => {
+        setGeneratingCharacter(charIndex);
+
+        try {
+            const character = characters[charIndex];
+            const promptToUse = customPrompt || character.enrichedPrompt;
+
+            if (!promptToUse) {
+                alert('⚠️ Primero enriquece el prompt clickeando "Enriquecer Prompt"');
+                return;
+            }
+
+            // Generar imagen con el prompt final
+            const result = await mediaGenerationService.generateInfluencerVisualWithPrompt(
+                promptToUse,
+                activeBrand
             );
 
             // Actualizar el personaje con la imagen generada
@@ -204,12 +245,11 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
             updatedCharacters[charIndex] = {
                 ...character,
                 image: result.imageUrl,
-                imagePrompt: result.prompt // Usar el prompt optimizado por Gemini
+                imagePrompt: promptToUse,
+                enrichedPrompt: promptToUse
             };
 
             console.log('🖼️ Image URL received:', result.imageUrl);
-            console.log('📦 Updated character object:', updatedCharacters[charIndex]);
-
             setCharacters(updatedCharacters);
 
             // Guardar en Firebase
@@ -220,20 +260,19 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
                         characterIndex: charIndex,
                         description: character.description,
                         imageUrl: result.imageUrl,
-                        imagePrompt: result.prompt,
+                        imagePrompt: promptToUse,
                         provider: result.service,
                         timestamp: result.timestamp
                     });
                     console.log('💾 Character saved to Firebase');
                 } catch (saveError) {
                     console.error('Error saving character to Firebase:', saveError);
-                    // No bloquear el flujo si falla el guardado
                 }
             }
 
-            console.log('✅ Character generated with optimized prompt:', result.prompt);
-            console.log('✅ Characters state updated, length:', updatedCharacters.length);
-            alert(`✅ Personaje generado: ${character.description}`);
+            console.log('✅ Character generated with prompt:', promptToUse);
+            setEditingPrompt(null);
+            alert(`✅ Personaje generado exitosamente`);
         } catch (error) {
             console.error('Error generating character:', error);
             alert('❌ Error al generar personaje: ' + error.message);
@@ -413,23 +452,94 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
                                     <p className="text-sm font-semibold text-gray-800 mb-2">
                                         {character.description}
                                     </p>
-                                    <button
-                                        onClick={() => handleGenerateCharacter(index)}
-                                        disabled={generatingCharacter === index}
-                                        className={`w-full px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                                            character.image
-                                                ? 'bg-green-100 text-green-700 border border-green-300'
-                                                : 'bg-purple-500 text-white hover:bg-purple-600'
-                                        } ${generatingCharacter === index ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    >
-                                        {generatingCharacter === index ? (
-                                            <>⏳ Generando...</>
-                                        ) : character.image ? (
-                                            <>✅ Personaje Generado</>
+
+                                    {/* Enriched Prompt Display/Editor */}
+                                    {character.enrichedPrompt && (
+                                        <div className="mb-3 p-2 bg-gray-50 border border-gray-200 rounded">
+                                            <label className="block text-xs font-semibold text-gray-600 mb-1">
+                                                ✨ Prompt Enriquecido:
+                                            </label>
+                                            {editingPrompt?.type === 'character' && editingPrompt?.index === index ? (
+                                                <textarea
+                                                    value={tempPrompt}
+                                                    onChange={(e) => setTempPrompt(e.target.value)}
+                                                    className="w-full text-xs p-2 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                                    rows={6}
+                                                />
+                                            ) : (
+                                                <p className="text-xs text-gray-700 line-clamp-3">
+                                                    {character.enrichedPrompt}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Action Buttons */}
+                                    <div className="space-y-2">
+                                        {!character.enrichedPrompt ? (
+                                            // Step 1: Enrich Prompt
+                                            <button
+                                                onClick={() => handleEnrichCharacterPrompt(index)}
+                                                disabled={generatingCharacter === index}
+                                                className={`w-full px-3 py-2 rounded-md text-sm font-medium transition-colors bg-blue-500 text-white hover:bg-blue-600 ${generatingCharacter === index ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            >
+                                                {generatingCharacter === index ? (
+                                                    <>⏳ Enriqueciendo...</>
+                                                ) : (
+                                                    <>✨ Enriquecer Prompt</>
+                                                )}
+                                            </button>
                                         ) : (
-                                            <>🎨 Generar Personaje</>
+                                            <>
+                                                {/* Edit/Save Prompt Button */}
+                                                {editingPrompt?.type === 'character' && editingPrompt?.index === index ? (
+                                                    <button
+                                                        onClick={() => {
+                                                            const updatedCharacters = [...characters];
+                                                            updatedCharacters[index] = {
+                                                                ...character,
+                                                                enrichedPrompt: tempPrompt
+                                                            };
+                                                            setCharacters(updatedCharacters);
+                                                            setEditingPrompt(null);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-md text-sm font-medium bg-green-500 text-white hover:bg-green-600"
+                                                    >
+                                                        💾 Guardar Cambios
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => {
+                                                            setTempPrompt(character.enrichedPrompt);
+                                                            setEditingPrompt({ type: 'character', index });
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-md text-sm font-medium bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                                    >
+                                                        ✏️ Editar Prompt
+                                                    </button>
+                                                )}
+
+                                                {/* Generate Image Button */}
+                                                <button
+                                                    onClick={() => handleGenerateCharacter(index, character.enrichedPrompt)}
+                                                    disabled={generatingCharacter === index}
+                                                    className={`w-full px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                                        character.image
+                                                            ? 'bg-green-100 text-green-700 border border-green-300'
+                                                            : 'bg-purple-500 text-white hover:bg-purple-600'
+                                                    } ${generatingCharacter === index ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                >
+                                                    {generatingCharacter === index ? (
+                                                        <>⏳ Generando...</>
+                                                    ) : character.image ? (
+                                                        <>✅ Regenerar Imagen</>
+                                                    ) : (
+                                                        <>🎨 Generar Imagen</>
+                                                    )}
+                                                </button>
+                                            </>
                                         )}
-                                    </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
