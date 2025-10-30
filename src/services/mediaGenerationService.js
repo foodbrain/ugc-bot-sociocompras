@@ -3,7 +3,7 @@
 import { geminiService } from './geminiService';
 
 // Configuración de API - agregar a .env
-const IMAGE_API_PROVIDER = import.meta.env.VITE_IMAGE_API_PROVIDER || 'demo'; // 'vertex-ai', 'openai', 'stability', 'demo'
+const IMAGE_API_PROVIDER = import.meta.env.VITE_IMAGE_API_PROVIDER || 'openai'; // 'vertex-ai', 'openai', 'stability'
 const VERTEX_AI_PROJECT_ID = import.meta.env.VITE_VERTEX_AI_PROJECT_ID;
 const VERTEX_AI_LOCATION = import.meta.env.VITE_VERTEX_AI_LOCATION || 'us-central1';
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
@@ -48,10 +48,8 @@ export const mediaGenerationService = {
           imageResult = await this.generateWithStability(optimizedPrompt);
           break;
 
-        case 'demo':
         default:
-          imageResult = await this.generateDemoImage(optimizedPrompt);
-          break;
+          throw new Error(`Provider no configurado: ${IMAGE_API_PROVIDER}. Configure VITE_IMAGE_API_PROVIDER en .env con: 'openai', 'vertex-ai', o 'stability'`);
       }
 
       return {
@@ -178,7 +176,23 @@ Only return your best prompt. Nothing else.`;
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error('DALL-E 3 Error Response:', errorData);
-      throw new Error(`DALL-E 3 API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+
+      // Mensajes específicos según el tipo de error
+      const errorMessage = errorData.error?.message || 'Unknown error';
+
+      if (response.status === 429 || errorMessage.includes('rate limit')) {
+        throw new Error('⚠️ Has alcanzado el límite de tasa de OpenAI. Espera unos minutos e intenta nuevamente.');
+      }
+
+      if (errorMessage.includes('billing') || errorMessage.includes('quota') || errorMessage.includes('insufficient')) {
+        throw new Error('💳 Has alcanzado el límite de créditos de OpenAI. Recarga tus créditos en: https://platform.openai.com/account/billing');
+      }
+
+      if (response.status === 401) {
+        throw new Error('🔑 API Key de OpenAI inválida o expirada. Verifica tu VITE_OPENAI_API_KEY en .env');
+      }
+
+      throw new Error(`DALL-E 3 error: ${errorMessage}`);
     }
 
     const data = await response.json();
@@ -222,22 +236,6 @@ Only return your best prompt. Nothing else.`;
     return {
       url: url,
       provider: 'stability'
-    };
-  },
-
-  /**
-   * Modo demo - genera placeholder con prompt visible
-   */
-  async generateDemoImage(prompt) {
-    console.log('🎨 Demo mode - generating placeholder...');
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Generar URL de placeholder con texto del prompt
-    const shortPrompt = prompt.substring(0, 50).replace(/\s+/g, '+');
-
-    return {
-      url: `https://placehold.co/1080x1920/6366f1/white?text=Demo+Mode%0A%0APrompt:+${shortPrompt}...`,
-      provider: 'demo'
     };
   },
 
