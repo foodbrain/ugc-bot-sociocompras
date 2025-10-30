@@ -1,6 +1,7 @@
 // Service for media generation integrations
-// Supports multiple providers: Vertex AI Imagen 3, DALL-E 3, Stability AI
+// Supports multiple providers: Vertex AI Imagen 4, DALL-E 3, Stability AI
 import { geminiService } from './geminiService';
+import { PredictionServiceClient } from '@google-cloud/aiplatform';
 
 // Configuración de API - agregar a .env
 const IMAGE_API_PROVIDER = import.meta.env.VITE_IMAGE_API_PROVIDER || 'openai'; // 'vertex-ai', 'openai', 'stability'
@@ -204,26 +205,94 @@ Only return your best prompt. Nothing else. No explanations, no markdown, just t
   },
 
   /**
-   * Generar con Vertex AI Imagen 3
+   * Generar con Vertex AI Imagen 4 (usando ADC)
    */
   async generateWithVertexAI(prompt) {
     if (!VERTEX_AI_PROJECT_ID) {
-      throw new Error('VITE_VERTEX_AI_PROJECT_ID not configured');
+      throw new Error('VITE_VERTEX_AI_PROJECT_ID not configured. Run: gcloud config set project creador-de-contenido-f413');
     }
 
-    // TODO: Implementar llamada real a Vertex AI
-    // Requiere autenticación con Google Cloud
-    console.log('📡 Calling Vertex AI Imagen 3...');
+    try {
+      console.log('📡 Calling Vertex AI Imagen 4...');
+      console.log('Project:', VERTEX_AI_PROJECT_ID);
+      console.log('Location:', VERTEX_AI_LOCATION);
 
-    const endpoint = `https://${VERTEX_AI_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_AI_PROJECT_ID}/locations/${VERTEX_AI_LOCATION}/publishers/google/models/imagen-3.0-generate-001:predict`;
+      // El cliente usará automáticamente Application Default Credentials
+      // configuradas con: gcloud auth application-default login
+      const predictionServiceClient = new PredictionServiceClient({
+        apiEndpoint: `${VERTEX_AI_LOCATION}-aiplatform.googleapis.com`,
+      });
 
-    // Simular por ahora
-    await new Promise(resolve => setTimeout(resolve, 3000));
+      const endpoint = `projects/${VERTEX_AI_PROJECT_ID}/locations/${VERTEX_AI_LOCATION}/publishers/google/models/imagen-3.0-generate-001`;
 
-    return {
-      url: `https://via.placeholder.com/1080x1920.png?text=Imagen+3+Generated`,
-      provider: 'vertex-ai'
-    };
+      // Preparar la solicitud para Imagen 4
+      const instanceValue = {
+        prompt: prompt,
+        // Parámetros optimizados para máxima calidad
+        sampleCount: 1,
+        aspectRatio: '9:16', // Vertical para UGC
+        negativePrompt: 'blurry, low quality, distorted, cartoon, illustration, drawing, painting',
+        // Imagen 4 tiene mejor manejo de prompts que DALL-E 3
+      };
+
+      const instance = predictionServiceClient.helpers.toValue(instanceValue);
+      const instances = [instance];
+
+      const parameter = {
+        sampleCount: 1,
+      };
+      const parameters = predictionServiceClient.helpers.toValue(parameter);
+
+      const request = {
+        endpoint,
+        instances,
+        parameters,
+      };
+
+      console.log('🔄 Generating image with Vertex AI...');
+      const [response] = await predictionServiceClient.predict(request);
+
+      console.log('✅ Vertex AI response received');
+
+      // Extraer la imagen generada
+      const predictions = response.predictions;
+      if (!predictions || predictions.length === 0) {
+        throw new Error('No predictions returned from Vertex AI');
+      }
+
+      // Imagen 4 retorna la imagen en base64
+      const prediction = predictions[0];
+      const imageBytes = prediction.structValue.fields.bytesBase64Encoded.stringValue;
+
+      // Convertir base64 a data URL para mostrar en navegador
+      const imageUrl = `data:image/png;base64,${imageBytes}`;
+
+      console.log('✅ Imagen 4 image generated successfully');
+      console.log('Image size:', (imageBytes.length * 0.75 / 1024).toFixed(2), 'KB');
+
+      return {
+        url: imageUrl,
+        provider: 'vertex-ai',
+        base64: imageBytes // Guardar para subir a Firebase Storage si es necesario
+      };
+    } catch (error) {
+      console.error('❌ Vertex AI Error:', error);
+
+      // Mensajes de error específicos
+      if (error.message?.includes('PERMISSION_DENIED')) {
+        throw new Error('🔐 Permission denied. Run: gcloud auth application-default login');
+      }
+
+      if (error.message?.includes('NOT_FOUND')) {
+        throw new Error('📦 Vertex AI API not enabled. Run: gcloud services enable aiplatform.googleapis.com');
+      }
+
+      if (error.message?.includes('UNAUTHENTICATED')) {
+        throw new Error('🔑 Not authenticated. Run: gcloud auth application-default login');
+      }
+
+      throw error;
+    }
   },
 
   /**
