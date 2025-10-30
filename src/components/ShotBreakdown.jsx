@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TRANSITIONS } from '../utils/soraFramework';
 import { mediaGenerationService } from '../services/mediaGenerationService';
+import { firebaseService } from '../services/firebaseService';
 
 const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
     const [shots, setShots] = useState([]);
@@ -131,6 +132,60 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
         }
     }, [script]);
 
+    // Cargar imágenes guardadas desde Firebase
+    useEffect(() => {
+        const loadSavedMedia = async () => {
+            if (!scriptId || shots.length === 0) return;
+
+            try {
+                const savedMedia = await firebaseService.getGeneratedMediaForScript(scriptId);
+                console.log('📥 Loading saved media from Firebase:', savedMedia.length, 'items');
+
+                // Aplicar imágenes guardadas a los personajes
+                const characterMedia = savedMedia.filter(m => m.type === 'character');
+                if (characterMedia.length > 0) {
+                    setCharacters(prev => {
+                        const updated = [...prev];
+                        characterMedia.forEach(media => {
+                            if (updated[media.characterIndex]) {
+                                updated[media.characterIndex] = {
+                                    ...updated[media.characterIndex],
+                                    image: media.imageUrl,
+                                    imagePrompt: media.imagePrompt
+                                };
+                            }
+                        });
+                        console.log('✅ Loaded', characterMedia.length, 'character images');
+                        return updated;
+                    });
+                }
+
+                // Aplicar imágenes guardadas a las escenas
+                const sceneMedia = savedMedia.filter(m => m.type === 'scene');
+                if (sceneMedia.length > 0) {
+                    setShots(prev => {
+                        const updated = [...prev];
+                        sceneMedia.forEach(media => {
+                            if (updated[media.shotIndex]) {
+                                updated[media.shotIndex] = {
+                                    ...updated[media.shotIndex],
+                                    image: media.imageUrl,
+                                    imagePrompt: media.imagePrompt
+                                };
+                            }
+                        });
+                        console.log('✅ Loaded', sceneMedia.length, 'scene images');
+                        return updated;
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading saved media:', error);
+            }
+        };
+
+        loadSavedMedia();
+    }, [scriptId, shots.length, characters.length]);
+
     const handleGenerateCharacter = async (charIndex) => {
         setGeneratingCharacter(charIndex);
 
@@ -151,9 +206,33 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
                 image: result.imageUrl,
                 imagePrompt: result.prompt // Usar el prompt optimizado por Gemini
             };
+
+            console.log('🖼️ Image URL received:', result.imageUrl);
+            console.log('📦 Updated character object:', updatedCharacters[charIndex]);
+
             setCharacters(updatedCharacters);
 
+            // Guardar en Firebase
+            if (scriptId) {
+                try {
+                    await firebaseService.saveGeneratedMedia(scriptId, `character-${charIndex}`, {
+                        type: 'character',
+                        characterIndex: charIndex,
+                        description: character.description,
+                        imageUrl: result.imageUrl,
+                        imagePrompt: result.prompt,
+                        provider: result.service,
+                        timestamp: result.timestamp
+                    });
+                    console.log('💾 Character saved to Firebase');
+                } catch (saveError) {
+                    console.error('Error saving character to Firebase:', saveError);
+                    // No bloquear el flujo si falla el guardado
+                }
+            }
+
             console.log('✅ Character generated with optimized prompt:', result.prompt);
+            console.log('✅ Characters state updated, length:', updatedCharacters.length);
             alert(`✅ Personaje generado: ${character.description}`);
         } catch (error) {
             console.error('Error generating character:', error);
@@ -169,8 +248,11 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
         try {
             const shot = shots[shotIndex];
 
-            // Generar imagen con Nano Banana
-            const result = await mediaGenerationService.generateInfluencerVisual(shot.content);
+            // Generar imagen con servicio configurado (demo, openai, etc.)
+            const result = await mediaGenerationService.generateInfluencerVisual(
+                shot.content,
+                activeBrand // Pasar contexto de marca
+            );
 
             // Actualizar el shot con la imagen generada
             const updatedShots = [...shots];
@@ -181,7 +263,26 @@ const ShotBreakdown = ({ script, scriptId, activeBrand }) => {
             };
             setShots(updatedShots);
 
-            alert('✅ Imagen generada con Nano Banana!\n\n(Demo mode)');
+            // Guardar en Firebase
+            if (scriptId) {
+                try {
+                    await firebaseService.saveGeneratedMedia(scriptId, `shot-${shotIndex}`, {
+                        type: 'scene',
+                        shotIndex: shotIndex,
+                        content: shot.content,
+                        imageUrl: result.imageUrl,
+                        imagePrompt: result.prompt,
+                        provider: result.service,
+                        timestamp: result.timestamp
+                    });
+                    console.log('💾 Scene image saved to Firebase');
+                } catch (saveError) {
+                    console.error('Error saving scene to Firebase:', saveError);
+                }
+            }
+
+            console.log('✅ Scene image generated with optimized prompt:', result.prompt);
+            alert('✅ Imagen de escena generada!');
         } catch (error) {
             console.error('Error generating image:', error);
             alert('❌ Error al generar imagen');
